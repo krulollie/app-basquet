@@ -17,6 +17,29 @@ function loadJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(
 function saveJSON(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} }
 
 let settings = loadJSON(SETTINGS_KEY, {});
+if (!Array.isArray(settings.favorites)) settings.favorites = [];
+if (settings.teamId && !settings.favorites.some((f) => f.id === settings.teamId)) {
+  settings.favorites.push({ id: settings.teamId, name: settings.teamName, category: '', clubId: settings.clubId || '' });
+}
+
+function selectTeam(team) {
+  const favorites = settings.favorites.filter((f) => f.id !== team.id);
+  favorites.unshift({ id: team.id, name: team.name, category: team.category || '', clubId: team.clubId || '' });
+  settings = { ...settings, clubId: team.clubId || settings.clubId, teamId: team.id, teamName: team.name, favorites: favorites.slice(0, 8) };
+  saveJSON(SETTINGS_KEY, settings);
+  state.season = []; state.match = null; state.live = null; state.visitedList = false;
+  go('home');
+}
+
+function removeFavorite(id) {
+  settings = { ...settings, favorites: settings.favorites.filter((f) => f.id !== id) };
+  if (settings.teamId === id) {
+    const next = settings.favorites[0];
+    settings = { ...settings, teamId: next ? next.id : null, teamName: next ? next.name : null };
+  }
+  saveJSON(SETTINGS_KEY, settings);
+  render();
+}
 let snapshots = loadJSON(SNAPSHOT_KEY, {});
 const apiKey = () => settings.apiKey || (window.FCBQ_CONFIG && window.FCBQ_CONFIG.apiKey) || '';
 
@@ -157,15 +180,23 @@ function render() {
 }
 
 function renderSetup() {
+  const favs = settings.favorites.map((f) => `
+    <li class="fav ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">
+      <span class="fav-pick"><strong>${esc(f.name)}</strong><small>${esc(f.category || '')}</small></span>
+      <button class="fav-remove" data-id="${esc(f.id)}" aria-label="Quitar">✕</button></li>`).join('');
   return `
   <section class="card">
-    <h2>Tu equipo</h2>
+    <h2>Equipos favoritos</h2>
+    ${favs ? `<ul class="teams favs">${favs}</ul><p class="hint">Toca uno para seguirlo. El marcado con ★ es el actual.</p>` : '<p class="hint">Todavía no has guardado ningún equipo.</p>'}
+  </section>
+  <section class="card">
+    <h2>Añadir equipo</h2>
     <p class="hint">Escribe el número del club (el de su URL en basquetcatala.cat) y elige el equipo.</p>
     <form id="club-form" class="row">
       <input id="club-id" inputmode="numeric" placeholder="Nº de club" value="${esc(settings.clubId || DEFAULT_CLUB)}" required>
       <button class="btn">Buscar</button>
     </form>
-    <div id="club-teams">${settings.teamName ? `<p class="hint">Equipo actual: <strong>${esc(settings.teamName)}</strong></p>` : ''}</div>
+    <div id="club-teams"></div>
   </section>
   <section class="card">
     <h2>Clave de acceso</h2>
@@ -192,7 +223,9 @@ function renderHome() {
       <span class="m-teams">${esc(m.home.name)}<br>${esc(m.away.name)}</span>
       <span class="m-res ${m.isLive ? 'live' : ''}">${esc(res)}</span></li>`;
   }).join('');
-  return `<section class="card"><h2>Calendario</h2><ul class="matches">${rows || '<li class="hint">Sin partidos esta temporada.</li>'}</ul></section>`;
+  const chips = settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
+    `<button class="team-chip ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">${esc(short(f.name, 22))}</button>`).join('')}</div>` : '';
+  return chips + `<section class="card"><h2>Calendario</h2><ul class="matches">${rows || '<li class="hint">Sin partidos esta temporada.</li>'}</ul></section>`;
 }
 
 function renderMatch() {
@@ -315,14 +348,20 @@ function bind(view) {
     try {
       const club = await api.club(clubId);
       box.innerHTML = `<p class="hint">${esc(club.name)}</p><ul class="teams">${club.teams.map((t) =>
-        `<li data-id="${esc(t.id)}" data-name="${esc(t.name)}" class="${t.id === settings.teamId ? 'sel' : ''}"><span>${esc(t.name)}</span><small>${esc(t.category)}</small></li>`).join('')}</ul>`;
-      box.querySelectorAll('li').forEach((li) => li.addEventListener('click', () => {
-        settings = { ...settings, clubId, teamId: li.dataset.id, teamName: li.dataset.name };
-        saveJSON(SETTINGS_KEY, settings);
-        go('home');
-      }));
+        `<li data-id="${esc(t.id)}" data-name="${esc(t.name)}" data-cat="${esc(t.category)}" class="${t.id === settings.teamId ? 'sel' : ''}"><span>${esc(t.name)}</span><small>${esc(t.category)}</small></li>`).join('')}</ul>`;
+      box.querySelectorAll('li').forEach((li) => li.addEventListener('click', () =>
+        selectTeam({ id: li.dataset.id, name: li.dataset.name, category: li.dataset.cat, clubId })));
     } catch (err) { box.innerHTML = `<p class="banner error">${esc(err.message)}</p>`; }
   });
+  view.querySelectorAll('.fav-remove').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); removeFavorite(b.dataset.id); }));
+  view.querySelectorAll('li.fav .fav-pick').forEach((el) => el.addEventListener('click', () => {
+    const f = settings.favorites.find((x) => x.id === el.parentElement.dataset.id);
+    if (f) selectTeam(f);
+  }));
+  view.querySelectorAll('.team-chip').forEach((b) => b.addEventListener('click', () => {
+    const f = settings.favorites.find((x) => x.id === b.dataset.id);
+    if (f && f.id !== settings.teamId) selectTeam(f);
+  }));
   const keyForm = $('#key-form', view);
   if (keyForm) keyForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -333,7 +372,7 @@ function bind(view) {
   const reset = $('#btn-reset', view);
   if (reset) reset.addEventListener('click', () => {
     localStorage.removeItem(SETTINGS_KEY); localStorage.removeItem(SNAPSHOT_KEY);
-    settings = {}; snapshots = {}; api = buildClient(); go('setup');
+    settings = { favorites: [] }; snapshots = {}; api = buildClient(); go('setup');
   });
 }
 
@@ -364,5 +403,5 @@ function demoClient() {
 }
 
 /* arranque */
-if (DEMO && !settings.teamId) settings = { teamId: '91044', teamName: 'DEMO · CB GRANOLLERS 2' };
+if (DEMO && !settings.teamId) settings = { teamId: '91044', teamName: 'DEMO · CB GRANOLLERS 2', favorites: [{ id: '91044', name: 'CB GRANOLLERS 2', category: 'C.T. MINI FEMENÍ 1R. ANY' }, { id: '91045', name: 'CB GRANOLLERS 2', category: 'C.T. PRE-MINI FEMENÍ' }] };
 go(settings.teamId ? 'home' : 'setup');

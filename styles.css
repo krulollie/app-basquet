@@ -99,3 +99,12 @@ tr.cum td { font-size: 11px !important; color: var(--ink-soft) !important; font-
 .teams li.sel { font-weight: 700; } .teams small { color: var(--ink-soft); font-size: 12px; }
 
 .foot { text-align: center; font-size: 11px; color: var(--ink-soft); padding: 8px 16px 24px; }
+
+/* favoritos */
+.favs li.fav { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.fav-pick { display: flex; flex-direction: column; flex: 1; }
+.favs li.sel .fav-pick strong::before { content: '★ '; color: var(--accent); }
+.fav-remove { border: 0; background: transparent; color: var(--ink-soft); font-size: 16px; padding: 6px 10px; cursor: pointer; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.team-chip { flex: 0 0 auto; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.team-chip.sel { background: var(--home); color: #fff; border-color: var(--home); }

@@ -261,9 +261,10 @@ function renderMatch() {
       ${teamBlock(m.away, m.away.score, side === 'away')}
     </section>
     ${venueCard(m)}
+    ${m.played && m.uuid ? `<a class="card venue" href="https://www.basquetcatala.cat/estadistica/partit/${esc(m.uuid)}" target="_blank" rel="noopener"><span class="venue-icon">📊</span><span class="venue-text"><strong>Estadísticas del partido</strong><br><span class="hint">Parciales, jugadas y jugadoras en basquetcatala.cat</span></span><span class="venue-go">Abrir ›</span></a>` : ''}
     <section class="card info">
       <p class="hint" style="margin:0">${m.played
-        ? 'Partido acabado. La federación solo sirve el detalle (parciales, faltas, jugadas y plantillas) mientras se juega; si lo seguiste desde aquí en directo se habría guardado.'
+        ? 'Partido acabado. El detalle en directo (parciales, faltas, jugadas y plantillas) se guarda aquí solo si la app estuvo abierta durante el partido; si no, consúltalo en la página oficial.'
         : 'Cuando la mesa abra el acta digital, esta pantalla pasará sola al directo con parciales por periodo, faltas, jugadas y plantillas. Se comprueba cada minuto.'}</p>
     </section>`;
   }

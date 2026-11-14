@@ -3,7 +3,7 @@ import { createClient, regulationPeriods, FcbqError } from './fcbq.js';
 
 const SETTINGS_KEY = 'basquet-settings-v2';
 const SNAPSHOT_KEY = 'basquet-snapshots-v2';
-const LIVE_POLL_MS = 10000;
+const LIVE_POLL_MS = new URLSearchParams(location.search).has('demo') ? 3000 : 10000;
 const WAIT_POLL_MS = 60000;
 const DEFAULT_CLUB = '1'; // Club Bàsquet Granollers
 
@@ -51,6 +51,8 @@ function buildClient() {
 
 /* ---------- estado y navegación ---------- */
 const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null, selectedPeriod: null };
+const fx = { adGameId: null, home: null, away: null, moveKey: null, celebrated: false, wakeLock: null };
+const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let timer = null;
 
 function go(screen, extra = {}) {
@@ -207,6 +209,7 @@ function render() {
   const html = { setup: renderSetup, home: renderHome, match: renderMatch }[state.screen]();
   view.innerHTML = (state.error ? `<div class="banner error">${esc(state.error)}</div>` : '') + html;
   bind(view);
+  runEffects(view);
 }
 
 function renderSetup() {
@@ -353,6 +356,7 @@ function renderMatch() {
       ${teamBlock(A, tA, side === 'away', tA > tH, m.away.logo)}
     </section>
 
+    ${lastPlayBand(live, reg)}
     <section class="card periods">
       <div class="card-head">Parciales <span class="hint-inline">toca un periodo para ver su detalle</span></div>
       <div class="table-wrap"><table id="partials">
@@ -386,6 +390,109 @@ function renderMatch() {
       <p class="hint">PTS puntos · FAL faltas · MIN minutos jugados · T1/T2/T3 tiros anotados/intentados.</p>
     </section>
     ${venueCard(m)}`;
+}
+
+/* ---------- efectos ---------- */
+function lastPlayBand(live, reg) {
+  const p = [...live.moves].reverse().find((m) => m.kind === 'basket' || m.kind === 'foul' || m.kind === 'timeout' || m.kind === 'period');
+  if (!p) return '';
+  const ICON = { basket: '🏀', foul: '✋', timeout: '⏸', period: '▮' };
+  const key = `${p.period}-${p.min}-${p.sec}-${p.move}-${p.player || ''}`;
+  return `<div class="band ${p.team || ''} k-${p.kind}" data-key="${esc(key)}">
+    <span class="band-icon">${ICON[p.kind] || ''}</span>
+    <span class="band-text">${p.player ? `<strong>${esc(short(p.player, 22))}</strong> · ` : ''}${esc(p.move)}${p.points ? ` <b>+${p.points}</b>` : ''}</span>
+    <span class="band-time">${periodLabel(p.period - 1, reg)} ${p.min}:${pad2(p.sec)}</span></div>`;
+}
+
+function runEffects(view) {
+  if (state.screen !== 'match' || !state.live) { releaseWakeLock(); return; }
+  const live = state.live, m = state.match, side = mineSide(m);
+  const totals = view.querySelectorAll('.scoreboard .total');
+  const sameMatch = fx.adGameId === live.adGameId;
+  fx.adGameId = live.adGameId;
+
+  if (sameMatch && fx.home !== null) {
+    const bump = (el, delta, cls) => {
+      if (!delta || !el) return;
+      el.classList.add('pop');
+      const f = document.createElement('span');
+      f.className = `float ${cls}`; f.textContent = `+${delta}`;
+      el.parentElement.appendChild(f);
+      setTimeout(() => f.remove(), 1600);
+    };
+    const dH = live.home.total - fx.home, dA = live.away.total - fx.away;
+    bump(totals[0], dH > 0 ? dH : 0, 'home');
+    bump(totals[1], dA > 0 ? dA : 0, 'away');
+    const mineScored = (side === 'home' && dH > 0) || (side === 'away' && dA > 0);
+    if (mineScored && navigator.vibrate) navigator.vibrate([30, 40, 30]);
+  }
+  fx.home = live.home.total; fx.away = live.away.total;
+
+  const band = view.querySelector('.band');
+  if (band) {
+    if (sameMatch && fx.moveKey && band.dataset.key !== fx.moveKey) band.classList.add('slide');
+    fx.moveKey = band.dataset.key;
+  }
+
+  const finished = view.querySelector('.status.final');
+  if (finished) {
+    releaseWakeLock();
+    const won = side && ((side === 'home') === (live.home.total > live.away.total)) && live.home.total !== live.away.total;
+    if (won && !fx.celebrated && !(snapshots[live.adGameId] || {}).celebrated && !reducedMotion) {
+      fx.celebrated = true;
+      if (snapshots[live.adGameId]) { snapshots[live.adGameId].celebrated = true; saveJSON(SNAPSHOT_KEY, snapshots); }
+      confetti(side === 'home' ? live.home.color : live.away.color);
+    }
+  } else {
+    requestWakeLock();
+  }
+}
+
+/* Pantalla encendida mientras hay directo (Safari iOS 16.4+ y Chrome). */
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator) || fx.wakeLock || document.hidden) return;
+  try {
+    fx.wakeLock = await navigator.wakeLock.request('screen');
+    fx.wakeLock.addEventListener('release', () => { fx.wakeLock = null; });
+  } catch (_) { fx.wakeLock = null; }
+}
+function releaseWakeLock() {
+  if (fx.wakeLock) { fx.wakeLock.release().catch(() => {}); fx.wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.screen === 'match' && state.live && !state.finished) requestWakeLock();
+});
+
+/* Confeti ligero en canvas, unos tres segundos. */
+function confetti(teamColor) {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'confetti';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const resize = () => { canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  resize();
+  const palette = [teamColor && !/^#?(fff|ffffff)$/i.test(teamColor) ? teamColor : '#0b3d5c', '#f6b31c', '#1aa38f', '#ffffff', '#e53935'];
+  const parts = Array.from({ length: 160 }, () => ({
+    x: Math.random() * innerWidth, y: -20 - Math.random() * innerHeight * 0.5,
+    w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+    vx: -1.5 + Math.random() * 3, vy: 2 + Math.random() * 3,
+    rot: Math.random() * Math.PI, vr: -0.2 + Math.random() * 0.4,
+    color: palette[Math.floor(Math.random() * palette.length)],
+  }));
+  const start = performance.now();
+  (function frame(now) {
+    const t = (now - start) / 1000;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.03;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = t > 2.5 ? Math.max(0, 1 - (t - 2.5) / 0.8) : 1;
+      ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (t < 3.3) requestAnimationFrame(frame); else canvas.remove();
+  })(start);
 }
 
 /* Texto para compartir: resultado, estado y parciales. */
@@ -452,7 +559,7 @@ function teamBlock(team, score, mine, leading = false, logo = null) {
   return `<div class="team ${mine ? 'mine' : ''} ${leading ? 'leading' : ''}">
     ${crest(logo, 'crest', team.color)}
     <div class="team-name">${esc(team.name)}</div>
-    <div class="total">${score === null || score === undefined ? '–' : score}</div>
+    <div class="total" data-total="${score === null || score === undefined ? '' : score}">${score === null || score === undefined ? '–' : score}</div>
   </div>`;
 }
 
@@ -512,6 +619,7 @@ $('#btn-refresh').addEventListener('click', () => { if (state.screen === 'match'
 if (state.screen === 'home') history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));
 
 /* ---------- modo demo: datos fijos para desarrollo ---------- */
+let demoTick = 0;
 function demoClient() {
   const load = (p) => fetch(p).then((r) => r.json());
   return {
@@ -526,7 +634,21 @@ function demoClient() {
     async matchDetail() { return {}; },
     async live() {
       const { normalizeLive } = await import('./fcbq.js');
-      return normalizeLive(await load('fixtures/live-303367.json'));
+      const raw = await load('fixtures/live-303367.json');
+      demoTick++;
+      if (params.has('final')) {
+        raw.period = 8; raw.matchTime = { minute: 0, second: 0 };
+        for (const t of raw.teams) while (t.periods.length < 8) t.periods.push({ ...t.periods[0], score: 2, faults: 0 });
+      } else if (demoTick > 1) {
+        // cada consulta añade una canasta a uno de los equipos
+        for (let i = 1; i < demoTick; i++) {
+          const t = raw.teams[i % 3 === 0 ? 0 : 1];
+          const per = t.periods[raw.period - 1]; per.score += 2; per.shotsOfTwoSuccessful = (per.shotsOfTwoSuccessful || 0) + 1;
+          const pl = t.players[i % t.players.length];
+          raw.moves.push({ idTeam: t.teamIdIntern, actorName: pl.name, actorShirtNumber: pl.dorsal, move: 'Cistella de 2', period: raw.period, min: 1, sec: Math.max(0, 7 - i), score: '0-0' });
+        }
+      }
+      return normalizeLive(raw);
     },
   };
 }

@@ -5,7 +5,7 @@ const SETTINGS_KEY = 'basquet-settings-v2';
 const SNAPSHOT_KEY = 'basquet-snapshots-v2';
 const LIVE_POLL_MS = 10000;
 const WAIT_POLL_MS = 60000;
-const DEFAULT_CLUB = '104'; // Club Esportiu Escola Pia de Sabadell
+const DEFAULT_CLUB = '1'; // Club Bàsquet Granollers
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -337,10 +337,10 @@ if (state.screen === 'home') history.replaceState(null, '', location.pathname + 
 function demoClient() {
   const load = (p) => fetch(p).then((r) => r.json());
   return {
-    async club() { return { name: 'CLUB DEMO', teams: [{ id: '88664', name: 'BASQUETPIASABADELL VERD', category: 'C.T. MINI FEMENÍ 1R. ANY' }] }; },
+    async club() { return { name: 'CLUB DEMO', teams: [{ id: '91044', name: 'CB GRANOLLERS 2', category: 'C.T. MINI FEMENÍ 1R. ANY' }] }; },
     async teamSeason() {
       const { normalizeMatch } = await import('./fcbq.js');
-      const ms = (await load('fixtures/season-88664.json')).map(normalizeMatch);
+      const ms = (await load('fixtures/season-91044.json')).map(normalizeMatch);
       const live = ms.find((m) => m.adGameId === '302995');
       if (live) { live.isLive = true; live.played = false; live.adGameId = '303367'; live.home.score = null; live.away.score = null; }
       return ms;
@@ -354,5 +354,5 @@ function demoClient() {
 }
 
 /* arranque */
-if (DEMO && !settings.teamId) settings = { teamId: '88664', teamName: 'DEMO · BASQUETPIASABADELL VERD' };
+if (DEMO && !settings.teamId) settings = { teamId: '91044', teamName: 'DEMO · CB GRANOLLERS 2' };
 go(settings.teamId ? 'home' : 'setup');

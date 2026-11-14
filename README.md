@@ -49,8 +49,9 @@ GET públicos con CORS abierto, así que el navegador del móvil los llama direc
 - En minibàsquet `score` y `teams[].score` son del **periodo en curso**; el total es la suma de
   `teams[].periods[].score`. El marcador acumulado de cada jugada lo calcula la app a partir de
   "Cistella de 1/2/3".
-- Ids de equipo (`idSignedTeam`) cambian cada temporada. Club Escola Pia Sabadell = 104;
-  BASQUETPIASABADELL VERD 2026-27 = 88664.
+- Ids de equipo (`idSignedTeam`) cambian cada temporada. Club Bàsquet Granollers = 1;
+  CB GRANOLLERS 2 (C.T. Mini Femení 1r any) 2026-27 = 91044. Ojo: el club tiene varios equipos
+  llamados "CB GRANOLLERS 2" en distintas categorías.
 - Las estadísticas de partidos acabados (`msstats.optimalwayconsulting.com`) exigen autenticación y no se usan.
 
 ## Aviso

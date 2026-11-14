@@ -236,7 +236,7 @@ function renderHome() {
     const won = side && m.played && m.home.score !== null ? ((m.home.score > m.away.score) === (side === 'home') ? 'win' : 'loss') : '';
     return `<li class="match-row ${won}" data-id="${esc(m.idMatch)}">
       <span class="m-date">${fmtDate(m.date)}</span>
-      <span class="m-teams">${esc(m.home.name)}<br>${esc(m.away.name)}</span>
+      <span class="m-teams"><span class="m-team">${crest(m.home.logo, 'crest-sm')}${esc(m.home.name)}</span><span class="m-team">${crest(m.away.logo, 'crest-sm')}${esc(m.away.name)}</span></span>
       <span class="m-res ${m.isLive ? 'live' : ''}">${esc(res)}</span></li>`;
   }).join('');
   const chips = settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
@@ -257,9 +257,9 @@ function renderMatch() {
       : `<div class="status wait">${state.loading ? 'Cargando…' : m.adGameId ? 'Esperando datos en directo' : 'Sin acta digital todavía'}</div>`;
     return header + `
     <section class="card scoreboard">
-      ${teamBlock(m.home, m.home.score, side === 'home')}
+      ${teamBlock(m.home, m.home.score, side === 'home', false, m.home.logo)}
       <div class="middle">${status}<div class="diff">${fmtDate(m.date)} ${fmtTime(m.date)}</div></div>
-      ${teamBlock(m.away, m.away.score, side === 'away')}
+      ${teamBlock(m.away, m.away.score, side === 'away', false, m.away.logo)}
     </section>
     ${venueCard(m)}
     ${m.played && m.uuid ? `<a class="card venue" href="https://www.basquetcatala.cat/estadistica/partit/${esc(m.uuid)}" target="_blank" rel="noopener"><span class="venue-icon">📊</span><span class="venue-text"><strong>Estadísticas del partido</strong><br><span class="hint">Parciales, jugadas y jugadoras en basquetcatala.cat</span></span><span class="venue-go">Abrir ›</span></a>` : ''}
@@ -330,13 +330,13 @@ function renderMatch() {
 
   return header + `
     <section class="card scoreboard">
-      ${teamBlock(H, tH, side === 'home', tH > tA)}
+      ${teamBlock(H, tH, side === 'home', tH > tA, m.home.logo)}
       <div class="middle">
         <div class="status ${finished ? 'final' : 'live'}">${finished ? 'FINAL' : `${periodLabel(cur, reg)} · ${clock}`}</div>
         <div class="diff">${esc(diffText)}</div>
         <div class="period-score">${finished ? '' : `este periodo ${ps(H, cur) ?? 0}–${ps(A, cur) ?? 0} · faltas ${H.periods[cur] ? H.periods[cur].fouls : 0}–${A.periods[cur] ? A.periods[cur].fouls : 0}`}</div>
       </div>
-      ${teamBlock(A, tA, side === 'away', tA > tH)}
+      ${teamBlock(A, tA, side === 'away', tA > tH, m.away.logo)}
     </section>
 
     <section class="card periods">
@@ -427,8 +427,13 @@ function venueCard(m) {
     : `<section class="card venue">${body}</section>`;
 }
 
-function teamBlock(team, score, mine, leading = false) {
+function crest(url, cls = 'crest') {
+  return url ? `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="${cls} crest-empty"></span>`;
+}
+
+function teamBlock(team, score, mine, leading = false, logo = null) {
   return `<div class="team ${mine ? 'mine' : ''} ${leading ? 'leading' : ''}">
+    ${crest(logo)}
     <div class="team-name">${esc(team.name)}</div>
     <div class="total">${score === null || score === undefined ? '–' : score}</div>
   </div>`;

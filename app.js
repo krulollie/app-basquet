@@ -27,7 +27,7 @@ function selectTeam(team) {
   favorites.unshift({ id: team.id, name: team.name, category: team.category || '', clubId: team.clubId || '' });
   settings = { ...settings, clubId: team.clubId || settings.clubId, teamId: team.id, teamName: team.name, favorites: favorites.slice(0, 8) };
   saveJSON(SETTINGS_KEY, settings);
-  state.season = []; state.match = null; state.live = null; state.visitedList = false;
+  state.season = []; state.match = null; state.live = null; state.visitedList = false; state.standings = null;
   go('home');
 }
 
@@ -50,7 +50,9 @@ function buildClient() {
 }
 
 /* ---------- estado y navegación ---------- */
-const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null, selectedPeriod: null };
+const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null, selectedPeriod: null, homeTab: 'calendar', standings: null, standingsLoading: false };
+const STANDINGS_KEY = 'basquet-standings-v1';
+const STANDINGS_TTL_MS = 30 * 60 * 1000;
 const fx = { adGameId: null, home: null, away: null, moveKey: null, celebrated: false, wakeLock: null };
 const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let timer = null;
@@ -184,6 +186,55 @@ function fail(e) {
   render();
 }
 
+/* ---------- clasificación ----------
+   La web oficial no expone la clasificación por API: se calcula a partir de los calendarios de
+   todos los equipos del grupo (2 puntos por victoria, 1 por derrota), que es exactamente lo que
+   hace la federación en la primera fase. */
+function currentGroupId(season) {
+  const ref = pickMatch(season) || season.filter((m) => m.played).pop() || season[0];
+  return ref ? ref.groupId : null;
+}
+
+async function loadStandings(force = false) {
+  const groupId = currentGroupId(state.season);
+  if (!groupId) { state.standings = { rows: [], groupId: null }; render(); return; }
+  const cache = loadJSON(STANDINGS_KEY, {});
+  const hit = cache[groupId];
+  if (!force && hit && Date.now() - hit.savedAt < STANDINGS_TTL_MS) { state.standings = hit; render(); return; }
+  state.standingsLoading = true; render();
+  try {
+    const inGroup = state.season.filter((m) => m.groupId === groupId);
+    const teamIds = [...new Set(inGroup.flatMap((m) => [m.home.id, m.away.id]).filter(Boolean))];
+    const seasons = await Promise.all(teamIds.map((id) => id === settings.teamId ? state.season : api.teamSeason(id).catch(() => [])));
+    const matches = new Map();
+    const info = {};
+    for (const list of seasons) for (const m of list) {
+      if (m.groupId !== groupId) continue;
+      matches.set(m.idMatch, m);
+      info[m.home.id] = { name: m.home.name, logo: m.home.logo || (info[m.home.id] || {}).logo };
+      info[m.away.id] = { name: m.away.name, logo: m.away.logo || (info[m.away.id] || {}).logo };
+    }
+    const table = {};
+    for (const id of Object.keys(info)) table[id] = { id, name: info[id].name, logo: info[id].logo, J: 0, G: 0, P: 0, PF: 0, PC: 0 };
+    for (const m of matches.values()) {
+      if (!m.played || m.home.score === null || m.away.score === null) continue;
+      for (const [id, pf, pc] of [[m.home.id, m.home.score, m.away.score], [m.away.id, m.away.score, m.home.score]]) {
+        const t = table[id]; if (!t) continue;
+        t.J++; t.PF += pf; t.PC += pc; if (pf > pc) t.G++; else t.P++;
+      }
+    }
+    const rows = Object.values(table).map((t) => ({ ...t, pts: 2 * t.G + t.P, diff: t.PF - t.PC }))
+      .sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.PF - a.PF);
+    const sample = inGroup[0];
+    state.standings = { groupId, rows, savedAt: Date.now(), title: `${sample.category || ''} · ${sample.competition || ''}${sample.group ? ' · grupo ' + sample.group : ''}`, played: [...matches.values()].filter((m) => m.played).length, total: matches.size };
+    cache[groupId] = state.standings; saveJSON(STANDINGS_KEY, cache);
+  } catch (e) {
+    console.error(e);
+    state.standings = { groupId, rows: [], error: 'No se ha podido calcular la clasificación.' };
+  }
+  state.standingsLoading = false; render();
+}
+
 /* ---------- utilidades de presentación ---------- */
 const fmtDate = (d) => d ? d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
 const fmtTime = (d) => d ? d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -258,7 +309,25 @@ function renderHome() {
   }).join('');
   const chips = settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
     `<button class="team-chip ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">${esc(short(f.name, 22))}</button>`).join('')}</div>` : '';
-  return chips + `<section class="card"><h2>Calendario</h2><ul class="matches">${rows || '<li class="hint">Sin partidos esta temporada.</li>'}</ul></section>`;
+  const tabs = `<div class="tabs"><button class="tab ${state.homeTab === 'calendar' ? 'sel' : ''}" data-tab="calendar">Calendario</button><button class="tab ${state.homeTab === 'standings' ? 'sel' : ''}" data-tab="standings">Clasificación</button></div>`;
+  if (state.homeTab === 'standings') return chips + tabs + renderStandings();
+  return chips + tabs + `<section class="card"><ul class="matches">${rows || '<li class="hint">Sin partidos esta temporada.</li>'}</ul></section>`;
+}
+
+function renderStandings() {
+  const s = state.standings;
+  if (state.standingsLoading || !s) return `<section class="card"><div class="loading">Calculando clasificación…</div></section>`;
+  if (s.error) return `<section class="card"><p class="banner error">${esc(s.error)}</p></section>`;
+  if (!s.rows.length) return `<section class="card"><p class="hint">Todavía no hay resultados en este grupo.</p></section>`;
+  const body = s.rows.map((t, i) => `<tr class="${t.id === settings.teamId ? 'mine' : ''}">
+      <td class="pos">${i + 1}</td>
+      <td class="nm"><div>${crest(t.logo, 'crest-sm')}<span>${esc(t.name)}</span></div></td>
+      <td>${t.J}</td><td>${t.G}</td><td>${t.P}</td><td class="pf">${t.PF}</td><td class="pf">${t.PC}</td><td class="b">${t.pts}</td></tr>`).join('');
+  return `<section class="card standings">
+    <div class="card-head">${esc(s.title || 'Clasificación')}</div>
+    <div class="table-wrap"><table class="stand"><thead><tr><th class="pos">#</th><th class="nm">Equipo</th><th>J</th><th>G</th><th>P</th><th class="pf">PF</th><th class="pf">PC</th><th>Pts</th></tr></thead><tbody>${body}</tbody></table></div>
+    <p class="hint">Calculada con los resultados de los ${s.played} partidos jugados de ${s.total}. 2 puntos por victoria y 1 por derrota; los empates a puntos se ordenan por diferencia. Actualizada ${fmtTime(new Date(s.savedAt))}.</p>
+  </section>`;
 }
 
 function renderMatch() {
@@ -594,6 +663,10 @@ function bind(view) {
     const f = settings.favorites.find((x) => x.id === b.dataset.id);
     if (f && f.id !== settings.teamId) selectTeam(f);
   }));
+  view.querySelectorAll('.tabs .tab').forEach((b) => b.addEventListener('click', () => {
+    state.homeTab = b.dataset.tab; render();
+    if (state.homeTab === 'standings') loadStandings();
+  }));
   const selectPeriod = (v) => { state.selectedPeriod = v === 'all' ? 'all' : Number(v); render(); };
   view.querySelectorAll('.periods-sel .team-chip').forEach((b) => b.addEventListener('click', () => selectPeriod(b.dataset.p)));
   view.querySelectorAll('#partials th[data-i], #partials td[data-i]').forEach((c) => c.addEventListener('click', () => selectPeriod(c.dataset.i)));
@@ -615,7 +688,7 @@ $('#btn-back').addEventListener('click', () => { state.visitedList = true; go(st
 $('#btn-settings').addEventListener('click', () => go('setup'));
 $('#btn-share').addEventListener('click', shareMatch);
 $('#btn-calendar').addEventListener('click', () => { state.visitedList = true; go('home'); });
-$('#btn-refresh').addEventListener('click', () => { if (state.screen === 'match') loadMatch(); else loadSeason(); });
+$('#btn-refresh').addEventListener('click', () => { if (state.screen === 'match') loadMatch(); else if (state.homeTab === 'standings') loadStandings(true); else loadSeason(); });
 if (state.screen === 'home') history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));
 
 /* ---------- modo demo: datos fijos para desarrollo ---------- */
@@ -624,8 +697,11 @@ function demoClient() {
   const load = (p) => fetch(p).then((r) => r.json());
   return {
     async club() { return { name: 'CLUB DEMO', teams: [{ id: '91044', name: 'CB GRANOLLERS 2', category: 'C.T. MINI FEMENÍ 1R. ANY' }] }; },
-    async teamSeason() {
+    async teamSeason(teamId) {
       const { normalizeMatch } = await import('./fcbq.js');
+      if (teamId && teamId !== '91044') {
+        return (await load('fixtures/group-24024.json')).map(normalizeMatch).filter((m) => m.home.id === teamId || m.away.id === teamId);
+      }
       const ms = (await load('fixtures/season-91044.json')).map(normalizeMatch);
       const live = ms.find((m) => m.adGameId === '302995');
       if (live) { live.isLive = true; live.played = false; live.adGameId = '303367'; live.home.score = null; live.away.score = null; }

@@ -195,9 +195,11 @@ table.stand th { font-size: 10px; }
 table.stand .pos { width: 22px; color: var(--ink-soft); }
 table.stand { table-layout: fixed; width: 100%; }
 table.stand th.pos, table.stand td.pos { width: 20px; }
-table.stand th:nth-child(n+3), table.stand td:nth-child(n+3) { width: 26px; }
-table.stand th.pf, table.stand td.pf { width: 34px; }
-table.stand th:last-child, table.stand td:last-child { width: 30px; }
+table.stand th:nth-child(n+3), table.stand td:nth-child(n+3) { width: 22px; }
+table.stand th.pf, table.stand td.pf { width: 31px; }
+table.stand th:last-child, table.stand td:last-child { width: 26px; }
+table.stand .crest-sm { width: 20px; height: 20px; }
+table.stand th, table.stand td { padding-left: 2px; padding-right: 2px; }
 table.stand .nm { text-align: left; font-weight: 600; }
 table.stand .nm div { display: flex; align-items: center; gap: 6px; min-width: 0; }
 table.stand .nm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }

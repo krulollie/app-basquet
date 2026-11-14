@@ -53,6 +53,9 @@ GET públicos con CORS abierto, así que el navegador del móvil los llama direc
   CB GRANOLLERS 2 (C.T. Mini Femení 1r any) 2026-27 = 91044. Ojo: el club tiene varios equipos
   llamados "CB GRANOLLERS 2" en distintas categorías.
 - Las estadísticas de partidos acabados (`msstats.optimalwayconsulting.com`) exigen autenticación y no se usan.
+- La clasificación no tiene API (la web la pinta en servidor): la app la calcula con los calendarios de todos los
+  equipos del grupo (`idGroup`), 2 puntos por victoria y 1 por derrota, empates por diferencia. Coincide con la
+  oficial en primera fase; se cachea 30 minutos.
 
 ## Aviso
 

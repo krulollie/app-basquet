@@ -50,7 +50,7 @@ function buildClient() {
 }
 
 /* ---------- estado y navegación ---------- */
-const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null };
+const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null, selectedPeriod: null };
 let timer = null;
 
 function go(screen, extra = {}) {
@@ -119,7 +119,7 @@ async function loadMatch() {
     } else {
       // Partido acabado (o todavía sin arrancar): usamos la última instantánea guardada.
       const snap = snapshots[state.match.adGameId];
-      state.live = snap ? snap.live : null;
+      state.live = snap ? migrateLive(snap.live) : null;
       state.finished = state.match.played || Boolean(snap);
       if (!state.live) {
         const detail = await api.matchDetail(state.match.adGameId).catch(() => null);
@@ -129,6 +129,21 @@ async function loadMatch() {
       if (!state.match.played) schedule(WAIT_POLL_MS);
     }
   } catch (e) { fail(e); schedule(LIVE_POLL_MS * 3); }
+}
+
+/* Instantáneas guardadas con el formato antiguo (parciales como números). */
+function migrateLive(live) {
+  if (!live) return live;
+  const fix = (t) => {
+    if (t.periods.length && typeof t.periods[0] === 'number') {
+      t.periods = t.periods.map((n) => ({ score: n, fouls: 0, t1: { made: 0, att: 0 }, t2: { made: 0, att: 0 }, t3: { made: 0, att: 0 } }));
+    }
+    t.shots = t.shots || { t1: { made: 0, att: 0 }, t2: { made: 0, att: 0 }, t3: { made: 0, att: 0 } };
+    t.players = (t.players || []).map((p) => ({ fouls: 0, t1: { made: 0, att: 0 }, t2: { made: 0, att: 0 }, t3: { made: 0, att: 0 }, ...p }));
+  };
+  fix(live.home); fix(live.away);
+  live.moves = (live.moves || []).map((mv) => ({ kind: mv.points ? 'basket' : 'other', ...mv }));
+  return live;
 }
 
 function pruneSnapshots() {
@@ -251,76 +266,106 @@ function renderMatch() {
     </section>`;
   }
 
-  const tH = live.home.total, tA = live.away.total;
-  const nPer = Math.max(reg, live.home.periods.length, live.away.periods.length);
-  const d = tH - tA;
-  let diffText = d === 0 ? 'Empate' : `${short(d > 0 ? live.home.name : live.away.name)} +${Math.abs(d)}`;
-  if (side) { const mine = side === 'home' ? d : -d; diffText = mine === 0 ? 'Empate' : mine > 0 ? `Ganamos de ${mine}` : `Perdemos de ${-mine}`; }
+  const H = live.home, A = live.away;
+  const tH = H.total, tA = A.total;
+  const nPer = Math.max(reg, H.periods.length, A.periods.length);
+  const cur = live.period - 1;
   const finished = state.finished || (live.period >= nPer && live.clock && live.clock.minute === 0 && live.clock.second === 0);
+  const sel = state.selectedPeriod === null || state.selectedPeriod === undefined ? cur : state.selectedPeriod; // índice o 'all'
+  const d = tH - tA;
+  let diffText = d === 0 ? 'Empate' : `${short(d > 0 ? H.name : A.name)} +${Math.abs(d)}`;
+  if (side) { const mine = side === 'home' ? d : -d; diffText = mine === 0 ? 'Empate' : mine > 0 ? `Ganamos de ${mine}` : `Perdemos de ${-mine}`; }
   const clock = live.clock ? `${live.clock.minute}:${pad2(live.clock.second)}` : '';
-  const periodTxt = periodLabel(live.period - 1, reg);
-  const cumH = cumulative(live.home.periods), cumA = cumulative(live.away.periods);
+  const ps = (t, i) => t.periods[i] ? t.periods[i].score : undefined;
+  const cumH = cumulative(H.periods.map((p) => p.score)), cumA = cumulative(A.periods.map((p) => p.score));
 
   const cells = (team, other) => Array.from({ length: nPer }, (_, i) => {
-    const v = team.periods[i], o = other.periods[i];
-    const cls = [i === live.period - 1 && !finished ? 'active' : '', v !== undefined && o !== undefined && v > o ? 'won' : '', v === undefined ? 'empty' : ''].join(' ');
-    return `<td class="${cls}">${v === undefined ? '·' : v}</td>`;
+    const v = ps(team, i), o = ps(other, i);
+    const cls = [i === sel ? 'active' : '', v !== undefined && o !== undefined && v > o ? 'won' : '', v === undefined ? 'empty' : ''].join(' ');
+    return `<td class="${cls}" data-i="${i}">${v === undefined ? '·' : v}</td>`;
   }).join('');
-  const cumRow = (cum) => Array.from({ length: nPer }, (_, i) => `<td>${cum[i] !== undefined ? cum[i] : ''}</td>`).join('');
+  const numRow = (arr) => Array.from({ length: nPer }, (_, i) => `<td data-i="${i}">${arr[i] !== undefined ? arr[i] : ''}</td>`).join('');
 
-  const wonH = live.home.periods.filter((v, i) => v > (live.away.periods[i] ?? 0)).length;
-  const wonA = live.away.periods.filter((v, i) => v > (live.home.periods[i] ?? 0)).length;
-  const best = (t) => t.periods.length ? Math.max(...t.periods) : 0;
+  const wonH = H.periods.filter((p, i) => p.score > (ps(A, i) ?? 0)).length;
+  const wonA = A.periods.filter((p, i) => p.score > (ps(H, i) ?? 0)).length;
 
-  const plays = live.moves.slice(-12).reverse().map((p) => `
-    <li class="${p.team || ''} ${p.points ? 'basket' : ''}">
+  // Detalle del periodo seleccionado (o del partido entero).
+  const pick = (t) => sel === 'all' ? { score: t.total, fouls: t.fouls, ...t.shots } : (t.periods[sel] || { score: 0, fouls: 0, t1: { made: 0, att: 0 }, t2: { made: 0, att: 0 }, t3: { made: 0, att: 0 } });
+  const dH = pick(H), dA = pick(A);
+  const selLabel = sel === 'all' ? 'Partido' : periodLabel(sel, reg);
+  const shotTxt = (x) => `${x.made}/${x.att}`;
+  const cmpRow = (label, a, b, hi = true) => `<div class="cmp"><span class="${hi && a > b ? 'hi' : ''}">${a}</span><span class="cmp-label">${label}</span><span class="${hi && b > a ? 'hi' : ''}">${b}</span></div>`;
+  const detail = `
+    <div class="chips periods-sel">
+      <button class="team-chip ${sel === 'all' ? 'sel' : ''}" data-p="all">Partido</button>
+      ${Array.from({ length: nPer }, (_, i) => `<button class="team-chip ${sel === i ? 'sel' : ''} ${i > cur ? 'future' : ''}" data-p="${i}">${periodLabel(i, reg)}</button>`).join('')}
+    </div>
+    <div class="detail-head"><span class="home">${esc(H.shortName)}</span><strong>${esc(selLabel)}${sel === cur && !finished ? ' · en juego' : ''}</strong><span class="away">${esc(A.shortName)}</span></div>
+    ${cmpRow('Puntos', dH.score, dA.score)}
+    ${cmpRow('Faltas', dH.fouls, dA.fouls, false)}
+    ${cmpRow('Tiros libres', shotTxt(dH.t1), shotTxt(dA.t1), false)}
+    ${cmpRow('Tiros de 2', shotTxt(dH.t2), shotTxt(dA.t2), false)}
+    ${cmpRow('Tiros de 3', shotTxt(dH.t3), shotTxt(dA.t3), false)}`;
+
+  // Jugadas: todas las del periodo elegido, o las últimas del partido.
+  const ICON = { basket: '🏀', foul: '✋', miss: '○', sub: '⇄', timeout: '⏸', period: '▮', other: '' };
+  const movesSel = (sel === 'all' ? live.moves.slice(-20) : live.moves.filter((p) => p.period - 1 === sel)).reverse();
+  const plays = movesSel.map((p) => `
+    <li class="${p.team || ''} k-${p.kind}">
       <span class="p-time">${periodLabel(p.period - 1, reg)} ${p.min}:${pad2(p.sec)}</span>
-      <span class="p-text">${p.player ? `<strong>${esc(short(p.player, 22))}</strong> ` : ''}${esc(p.move)}</span>
+      <span class="p-text"><span class="p-icon">${ICON[p.kind] || ''}</span>${p.player ? `<strong>${esc(short(p.player, 22))}</strong> ` : ''}${esc(p.move)}</span>
       <span class="p-score">${p.points ? `${p.total.home}–${p.total.away}` : ''}</span></li>`).join('');
 
-  const scorers = (t) => t.players.filter((p) => p.points > 0).slice(0, 5).map((p) =>
-    `<li><span>${p.dorsal ? `<em>${esc(p.dorsal)}</em> ` : ''}${esc(short(p.name, 24))}</span><strong>${p.points}</strong></li>`).join('') || '<li class="hint">Sin puntos aún</li>';
+  // Plantilla completa.
+  const roster = (t, cls) => `
+    <h3 class="${cls}">${esc(short(t.name, 26))} <small>${t.fouls} faltas · TL ${shotTxt(t.shots.t1)} · T2 ${shotTxt(t.shots.t2)} · T3 ${shotTxt(t.shots.t3)}</small></h3>
+    <div class="table-wrap"><table class="roster"><thead><tr><th class="num">#</th><th class="nm">Jugadora</th><th>PTS</th><th>FAL</th><th>MIN</th><th>T1</th><th>T2</th><th>T3</th></tr></thead><tbody>
+    ${t.players.map((p) => `<tr class="${p.timePlayed === 0 ? 'bench' : ''}"><td class="num">${esc(p.dorsal || '')}</td><td class="nm">${esc(short(p.name, 24))}${p.captain ? ' <em>C</em>' : ''}</td><td class="b">${p.points}</td><td class="${p.fouls >= 4 ? 'warn' : ''}">${p.fouls}</td><td>${p.timePlayed}</td><td>${shotTxt(p.t1)}</td><td>${shotTxt(p.t2)}</td><td>${shotTxt(p.t3)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  const mineFirst = side === 'away' ? [[A, 'away'], [H, 'home']] : [[H, 'home'], [A, 'away']];
 
   return header + `
     <section class="card scoreboard">
-      ${teamBlock(live.home, tH, side === 'home', tH > tA)}
+      ${teamBlock(H, tH, side === 'home', tH > tA)}
       <div class="middle">
-        <div class="status ${finished ? 'final' : 'live'}">${finished ? 'FINAL' : `${periodTxt} · ${clock}`}</div>
+        <div class="status ${finished ? 'final' : 'live'}">${finished ? 'FINAL' : `${periodLabel(cur, reg)} · ${clock}`}</div>
         <div class="diff">${esc(diffText)}</div>
-        <div class="period-score">${finished ? '' : `este periodo ${live.home.periods[live.period - 1] ?? 0}–${live.away.periods[live.period - 1] ?? 0}`}</div>
+        <div class="period-score">${finished ? '' : `este periodo ${ps(H, cur) ?? 0}–${ps(A, cur) ?? 0} · faltas ${H.periods[cur] ? H.periods[cur].fouls : 0}–${A.periods[cur] ? A.periods[cur].fouls : 0}`}</div>
       </div>
-      ${teamBlock(live.away, tA, side === 'away', tA > tH)}
+      ${teamBlock(A, tA, side === 'away', tA > tH)}
     </section>
 
     <section class="card periods">
-      <div class="card-head">Parciales</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th class="team-col"></th>${Array.from({ length: nPer }, (_, i) => `<th class="${i === live.period - 1 && !finished ? 'active' : ''}">${periodLabel(i, reg)}</th>`).join('')}<th>Tot</th></tr></thead>
+      <div class="card-head">Parciales <span class="hint-inline">toca un periodo para ver su detalle</span></div>
+      <div class="table-wrap"><table id="partials">
+        <thead><tr><th class="team-col"></th>${Array.from({ length: nPer }, (_, i) => `<th class="${i === sel ? 'active' : ''}" data-i="${i}">${periodLabel(i, reg)}</th>`).join('')}<th class="${sel === 'all' ? 'active' : ''}" data-i="all">Tot</th></tr></thead>
         <tbody>
-          <tr class="home"><td class="team-col">${esc(live.home.shortName)}</td>${cells(live.home, live.away)}<td class="total-col">${tH}</td></tr>
-          <tr class="away"><td class="team-col">${esc(live.away.shortName)}</td>${cells(live.away, live.home)}<td class="total-col">${tA}</td></tr>
-          <tr class="cum"><td class="team-col">acum.</td>${cumRow(cumH)}<td></td></tr>
-          <tr class="cum"><td class="team-col">acum.</td>${cumRow(cumA)}<td></td></tr>
+          <tr class="home"><td class="team-col">${esc(H.shortName)}</td>${cells(H, A)}<td class="total-col">${tH}</td></tr>
+          <tr class="away"><td class="team-col">${esc(A.shortName)}</td>${cells(A, H)}<td class="total-col">${tA}</td></tr>
+          <tr class="cum"><td class="team-col">acum.</td>${numRow(cumH)}<td></td></tr>
+          <tr class="cum"><td class="team-col">acum.</td>${numRow(cumA)}<td></td></tr>
+          <tr class="cum fouls"><td class="team-col">faltas</td>${numRow(H.periods.map((p) => p.fouls))}<td>${H.fouls}</td></tr>
+          <tr class="cum fouls"><td class="team-col">faltas</td>${numRow(A.periods.map((p) => p.fouls))}<td>${A.fouls}</td></tr>
         </tbody></table></div>
       <div class="stats">
         <div class="stat"><span class="stat-label">Periodos ganados</span><span class="stat-val">${wonH} · ${wonA}</span></div>
-        <div class="stat"><span class="stat-label">Mejor parcial</span><span class="stat-val">${best(live.home)} · ${best(live.away)}</span></div>
-        <div class="stat"><span class="stat-label">Faltas</span><span class="stat-val">${live.home.fouls} · ${live.away.fouls}</span></div>
         <div class="stat"><span class="stat-label">Actualizado</span><span class="stat-val">${state.lastUpdate ? fmtTime(state.lastUpdate) : '—'}</span></div>
       </div>
     </section>
 
+    <section class="card detail">
+      ${detail}
+    </section>
+
     <section class="card">
-      <div class="card-head">Últimas jugadas</div>
+      <div class="card-head">Jugadas · ${esc(selLabel)}</div>
       <ul class="plays">${plays || '<li class="hint">Todavía no hay jugadas.</li>'}</ul>
     </section>
 
-    <section class="card scorers">
-      <div class="card-head">Anotadoras</div>
-      <div class="two-col">
-        <div><h3 class="home">${esc(short(live.home.name, 18))}</h3><ul>${scorers(live.home)}</ul></div>
-        <div><h3 class="away">${esc(short(live.away.name, 18))}</h3><ul>${scorers(live.away)}</ul></div>
-      </div>
+    <section class="card rosters">
+      <div class="card-head">Plantillas</div>
+      ${mineFirst.map(([t, cls]) => roster(t, cls)).join('')}
+      <p class="hint">PTS puntos · FAL faltas · MIN minutos jugados · T1/T2/T3 tiros anotados/intentados.</p>
     </section>
     ${venueCard(m)}`;
 }
@@ -354,7 +399,7 @@ function cumulative(arr) { let acc = 0; return arr.map((v) => (acc += v)); }
 function bind(view) {
   view.querySelectorAll('.match-row').forEach((li) => li.addEventListener('click', () => {
     const m = state.season.find((x) => x.idMatch === li.dataset.id);
-    if (m) go('match', { match: m, live: null, finished: false });
+    if (m) go('match', { match: m, live: null, finished: false, selectedPeriod: null });
   }));
   const clubForm = $('#club-form', view);
   if (clubForm) clubForm.addEventListener('submit', async (e) => {
@@ -375,10 +420,13 @@ function bind(view) {
     const f = settings.favorites.find((x) => x.id === el.parentElement.dataset.id);
     if (f) selectTeam(f);
   }));
-  view.querySelectorAll('.team-chip').forEach((b) => b.addEventListener('click', () => {
+  view.querySelectorAll('.team-chip[data-id]').forEach((b) => b.addEventListener('click', () => {
     const f = settings.favorites.find((x) => x.id === b.dataset.id);
     if (f && f.id !== settings.teamId) selectTeam(f);
   }));
+  const selectPeriod = (v) => { state.selectedPeriod = v === 'all' ? 'all' : Number(v); render(); };
+  view.querySelectorAll('.periods-sel .team-chip').forEach((b) => b.addEventListener('click', () => selectPeriod(b.dataset.p)));
+  view.querySelectorAll('#partials th[data-i], #partials td[data-i]').forEach((c) => c.addEventListener('click', () => selectPeriod(c.dataset.i)));
   const keyForm = $('#key-form', view);
   if (keyForm) keyForm.addEventListener('submit', (e) => {
     e.preventDefault();

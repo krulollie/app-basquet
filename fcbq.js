@@ -99,6 +99,23 @@ export function regulationPeriods(category) {
 
 const BASKET_RE = /^Cistella de (\d)/i;
 
+const shots = (o) => ({
+  t1: { made: o.shotsOfOneSuccessful || 0, att: o.shotsOfOneAttempted || 0 },
+  t2: { made: o.shotsOfTwoSuccessful || 0, att: o.shotsOfTwoAttempted || 0 },
+  t3: { made: o.shotsOfThreeSuccessful || 0, att: o.shotsOfThreeAttempted || 0 },
+});
+
+/* Clasifica una jugada por su texto (el acta digital viene en catalán). */
+export function moveKind(move) {
+  if (BASKET_RE.test(move)) return 'basket';
+  if (/^Personal|falta|Antiesportiva|Tècnica|Desqualificant/i.test(move)) return 'foul';
+  if (/Intent fallat/i.test(move)) return 'miss';
+  if (/Entra al camp|Surt del camp/i.test(move)) return 'sub';
+  if (/Temps mort/i.test(move)) return 'timeout';
+  if (/Final de per/i.test(move)) return 'period';
+  return 'other';
+}
+
 export function normalizeLive(d) {
   const teams = d.teams.map((t) => ({
     internId: t.teamIdIntern,
@@ -106,12 +123,19 @@ export function normalizeLive(d) {
     name: t.name,
     shortName: t.shortName,
     color: t.colorRgb,
-    periods: (t.periods || []).map((p) => p.score || 0),
+    periods: (t.periods || []).map((p) => ({ score: p.score || 0, fouls: p.faults || 0, ...shots(p) })),
     total: (t.periods || []).reduce((a, p) => a + (p.score || 0), 0),
     fouls: t.data ? t.data.faults || 0 : 0,
+    shots: shots(t.data || {}),
     players: (t.players || [])
-      .map((p) => ({ name: p.name, dorsal: p.dorsal, points: p.data ? p.data.score || 0 : 0, timePlayed: p.timePlayed || 0 }))
-      .sort((a, b) => b.points - a.points),
+      .map((p) => ({
+        name: p.name, dorsal: p.dorsal, captain: Boolean(p.captain),
+        points: p.data ? p.data.score || 0 : 0,
+        fouls: p.data ? p.data.faults || 0 : 0,
+        timePlayed: p.timePlayed || 0,
+        ...shots(p.data || {}),
+      }))
+      .sort((a, b) => b.points - a.points || b.timePlayed - a.timePlayed),
   }));
   const home = teams.find((t) => t.internId === d.localId) || teams[0];
   const away = teams.find((t) => t.internId === d.visitId) || teams[1];
@@ -127,6 +151,7 @@ export function normalizeLive(d) {
       player: m.actorName || null,
       dorsal: m.actorShirtNumber || null,
       move: m.move,
+      kind: moveKind(m.move),
       period: m.period,
       min: m.min, sec: m.sec,
       points: pts,

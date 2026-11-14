@@ -245,9 +245,9 @@ function renderMatch() {
       <div class="middle">${status}<div class="diff">${fmtDate(m.date)} ${fmtTime(m.date)}</div></div>
       ${teamBlock(m.away, m.away.score, side === 'away')}
     </section>
+    ${venueCard(m)}
     <section class="card info">
-      <div>📍 ${esc(m.venue || '')}<br><span class="hint">${esc(m.address || '')}</span></div>
-      <p class="hint">${m.played ? 'El feed en directo se cierra al acabar el partido; si lo seguiste desde aquí verás los parciales guardados.' : 'La página se actualiza sola cuando la mesa abre el acta digital.'}</p>
+      <p class="hint" style="margin:0">${m.played ? 'El feed en directo se cierra al acabar el partido; si lo seguiste desde aquí verás los parciales guardados.' : 'La página se actualiza sola cuando la mesa abre el acta digital.'}</p>
     </section>`;
   }
 
@@ -321,7 +321,24 @@ function renderMatch() {
         <div><h3 class="home">${esc(short(live.home.name, 18))}</h3><ul>${scorers(live.home)}</ul></div>
         <div><h3 class="away">${esc(short(live.away.name, 18))}</h3><ul>${scorers(live.away)}</ul></div>
       </div>
-    </section>`;
+    </section>
+    ${venueCard(m)}`;
+}
+
+/* Enlace a Google Maps: por coordenadas si las hay, si no por dirección. Abre la app si está instalada. */
+function mapsUrl(m) {
+  if (m.lat && m.lon) return `https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lon}`;
+  const q = [m.venue, m.address].filter(Boolean).join(', ');
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
+}
+
+function venueCard(m) {
+  if (!m.venue && !m.address) return '';
+  const url = mapsUrl(m);
+  const body = `<span class="venue-icon">📍</span><span class="venue-text"><strong>${esc(m.venue || 'Pabellón')}</strong><br><span class="hint">${esc(m.address || '')}</span></span>${url ? '<span class="venue-go">Cómo llegar ›</span>' : ''}`;
+  return url
+    ? `<a class="card venue" href="${url}" target="_blank" rel="noopener">${body}</a>`
+    : `<section class="card venue">${body}</section>`;
 }
 
 function teamBlock(team, score, mine, leading = false) {

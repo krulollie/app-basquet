@@ -123,12 +123,26 @@ async function loadMatch() {
       state.finished = state.match.played || Boolean(snap);
       if (!state.live) {
         const detail = await api.matchDetail(state.match.adGameId).catch(() => null);
-        if (detail) state.match = { ...state.match, ...detail };
+        if (detail) state.match = mergeMatch(state.match, detail);
       }
       render();
       if (!state.match.played) schedule(WAIT_POLL_MS);
     }
   } catch (e) { fail(e); schedule(LIVE_POLL_MS * 3); }
+}
+
+/* Mezcla dos versiones del mismo partido sin que un valor vacío pise uno que ya teníamos
+   (el endpoint de detalle, por ejemplo, no trae escudos). */
+function mergeMatch(base, extra) {
+  const out = { ...base };
+  for (const [k, v] of Object.entries(extra)) {
+    if (v === null || v === undefined) continue;
+    if (k === 'home' || k === 'away') {
+      out[k] = { ...base[k] };
+      for (const [k2, v2] of Object.entries(v)) if (v2 !== null && v2 !== undefined) out[k][k2] = v2;
+    } else out[k] = v;
+  }
+  return out;
 }
 
 /* Instantáneas guardadas con el formato antiguo (parciales como números). */
@@ -428,7 +442,7 @@ function venueCard(m) {
 }
 
 function crest(url, cls = 'crest') {
-  return url ? `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="${cls} crest-empty"></span>`;
+  return url ? `<img class="${cls}" src="${esc(url)}" alt="" ${cls === 'crest' ? '' : 'loading="lazy"'} onerror="this.style.visibility='hidden'">` : `<span class="${cls} crest-empty"></span>`;
 }
 
 function teamBlock(team, score, mine, leading = false, logo = null) {

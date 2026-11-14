@@ -1,0 +1,21 @@
+{
+  "name": "Marcador mini",
+  "short_name": "Marcador",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b3d5c",
+  "theme_color": "#0b3d5c",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

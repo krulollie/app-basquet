@@ -155,8 +155,14 @@ main { overflow-x: hidden; }
 .topbar h1 { min-width: 0; }
 
 /* escudos */
-.crest { width: 48px; height: 48px; object-fit: contain; display: block; margin: 0 auto 4px; border-radius: 8px; background: #fff; padding: 2px; }
-.crest-empty { background: transparent; }
-.crest-sm { width: 20px; height: 20px; object-fit: contain; border-radius: 4px; background: #fff; padding: 1px; flex: 0 0 auto; }
+.crest { width: 58px; height: 58px; border-radius: 50%; background: #fff; border: 2.5px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.14); display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; overflow: hidden; }
+.crest img { width: 78%; height: 78%; object-fit: contain; display: block; }
+.scoreboard .team:first-child .crest { border-color: var(--home); }
+.scoreboard .team:last-child .crest { border-color: var(--away); }
+.crest.crest-empty { background: var(--bg); border-style: dashed; box-shadow: none; }
+.crest.crest-empty::after { content: '🏀'; font-size: 20px; opacity: .5; }
+.crest-sm { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 auto; }
+.crest-sm img { width: 80%; height: 80%; object-fit: contain; display: block; }
+.crest-sm.crest-empty { background: var(--bg); border-style: dashed; }
 .m-team { display: flex; align-items: center; gap: 6px; }
 .m-teams { display: flex; flex-direction: column; gap: 3px; }

@@ -441,13 +441,16 @@ function venueCard(m) {
     : `<section class="card venue">${body}</section>`;
 }
 
-function crest(url, cls = 'crest') {
-  return url ? `<img class="${cls}" src="${esc(url)}" alt="" ${cls === 'crest' ? '' : 'loading="lazy"'} onerror="this.style.visibility='hidden'">` : `<span class="${cls} crest-empty"></span>`;
+/* Medallón con el escudo; el aro toma el color del equipo si el feed lo da (y no es blanco). */
+function crest(url, cls = 'crest', color = null) {
+  const ring = color && !/^#?(fff|ffffff)$/i.test(color) ? ` style="border-color:${esc(color)}"` : '';
+  const img = url ? `<img src="${esc(url)}" alt="" ${cls === 'crest' ? '' : 'loading="lazy"'} onerror="this.parentElement.classList.add('crest-empty')">` : '';
+  return `<span class="${cls} ${url ? '' : 'crest-empty'}"${ring}>${img}</span>`;
 }
 
 function teamBlock(team, score, mine, leading = false, logo = null) {
   return `<div class="team ${mine ? 'mine' : ''} ${leading ? 'leading' : ''}">
-    ${crest(logo)}
+    ${crest(logo, 'crest', team.color)}
     <div class="team-name">${esc(team.name)}</div>
     <div class="total">${score === null || score === undefined ? '–' : score}</div>
   </div>`;

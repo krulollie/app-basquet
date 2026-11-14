@@ -77,7 +77,14 @@ async function loadMatch() {
       state.loading = false;
       if (!state.match.adGameId) { render(); schedule(WAIT_POLL_MS); return; }
     }
-    const live = await api.live(state.match.adGameId);
+    let live = null;
+    try {
+      live = await api.live(state.match.adGameId);
+    } catch (e) {
+      // Con el partido acabado el servidor responde sin cabeceras CORS y el navegador lo trata
+      // como fallo de red: lo interpretamos como "ya no hay directo".
+      if (!state.match.played) throw e;
+    }
     state.lastUpdate = new Date();
     state.loading = false;
     if (live) {

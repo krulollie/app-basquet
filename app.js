@@ -46,7 +46,8 @@ async function loadSeason() {
     state.season = (await api.teamSeason(settings.teamId)).sort((a, b) => (a.date || 0) - (b.date || 0));
     state.loading = false;
     const auto = pickMatch(state.season);
-    if (auto && !params.has('list')) { go('match', { match: auto }); return; }
+    if (auto && !params.has('list') && !state.visitedList) { go('match', { match: auto }); return; }
+    state.visitedList = true;
     render();
   } catch (e) { fail(e); }
 }
@@ -148,6 +149,7 @@ function render() {
   const view = $('#view');
   $('#btn-back').hidden = state.screen === 'home' || (state.screen === 'setup' && !settings.teamId);
   $('#btn-refresh').hidden = state.screen === 'setup';
+  $('#btn-calendar').hidden = state.screen !== 'match';
   $('#title').textContent = state.screen === 'setup' ? 'Ajustes' : short(settings.teamName || 'Marcador mini', 26);
   const html = { setup: renderSetup, home: renderHome, match: renderMatch }[state.screen]();
   view.innerHTML = (state.error ? `<div class="banner error">${esc(state.error)}</div>` : '') + html;
@@ -335,8 +337,9 @@ function bind(view) {
   });
 }
 
-$('#btn-back').addEventListener('click', () => go(state.screen === 'match' ? 'home' : settings.teamId ? 'home' : 'setup'));
+$('#btn-back').addEventListener('click', () => { state.visitedList = true; go(state.screen === 'match' ? 'home' : settings.teamId ? 'home' : 'setup'); });
 $('#btn-settings').addEventListener('click', () => go('setup'));
+$('#btn-calendar').addEventListener('click', () => { state.visitedList = true; go('home'); });
 $('#btn-refresh').addEventListener('click', () => { if (state.screen === 'match') loadMatch(); else loadSeason(); });
 if (state.screen === 'home') history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));
 

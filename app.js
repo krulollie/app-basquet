@@ -205,7 +205,7 @@ function render() {
   $('#btn-refresh').hidden = state.screen === 'setup';
   $('#btn-calendar').hidden = state.screen !== 'match';
   $('#btn-share').hidden = state.screen !== 'match' || !state.match;
-  $('#title').textContent = state.screen === 'setup' ? 'Ajustes' : short(settings.teamName || 'Marcador mini', 26);
+  $('#title').textContent = state.screen === 'setup' ? 'Ajustes' : short(settings.teamName || 'Granollers Live', 26);
   const html = { setup: renderSetup, home: renderHome, match: renderMatch }[state.screen]();
   view.innerHTML = (state.error ? `<div class="banner error">${esc(state.error)}</div>` : '') + html;
   bind(view);

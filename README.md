@@ -1,4 +1,4 @@
-# Marcador mini
+# Granollers Live
 
 Web app móvil para seguir en directo un partido de la FCBQ con el **marcador global**, que la app
 oficial no muestra en minibàsquet (allí el marcador se reinicia en cada periodo).

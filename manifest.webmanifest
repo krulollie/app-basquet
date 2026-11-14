@@ -1,6 +1,6 @@
 {
-  "name": "Marcador mini",
-  "short_name": "Marcador",
+  "name": "Granollers Live",
+  "short_name": "Granollers Live",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0b3d5c",

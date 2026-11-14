@@ -262,7 +262,9 @@ function renderMatch() {
     </section>
     ${venueCard(m)}
     <section class="card info">
-      <p class="hint" style="margin:0">${m.played ? 'El feed en directo se cierra al acabar el partido; si lo seguiste desde aquí verás los parciales guardados.' : 'La página se actualiza sola cuando la mesa abre el acta digital.'}</p>
+      <p class="hint" style="margin:0">${m.played
+        ? 'Partido acabado. La federación solo sirve el detalle (parciales, faltas, jugadas y plantillas) mientras se juega; si lo seguiste desde aquí en directo se habría guardado.'
+        : 'Cuando la mesa abra el acta digital, esta pantalla pasará sola al directo con parciales por periodo, faltas, jugadas y plantillas. Se comprueba cada minuto.'}</p>
     </section>`;
   }
 

@@ -188,6 +188,7 @@ function render() {
   $('#btn-back').hidden = state.screen === 'home' || (state.screen === 'setup' && !settings.teamId);
   $('#btn-refresh').hidden = state.screen === 'setup';
   $('#btn-calendar').hidden = state.screen !== 'match';
+  $('#btn-share').hidden = state.screen !== 'match' || !state.match;
   $('#title').textContent = state.screen === 'setup' ? 'Ajustes' : short(settings.teamName || 'Marcador mini', 26);
   const html = { setup: renderSetup, home: renderHome, match: renderMatch }[state.screen]();
   view.innerHTML = (state.error ? `<div class="banner error">${esc(state.error)}</div>` : '') + html;
@@ -373,6 +374,43 @@ function renderMatch() {
     ${venueCard(m)}`;
 }
 
+/* Texto para compartir: resultado, estado y parciales. */
+function shareText() {
+  const m = state.match, live = state.live, reg = regulationPeriods(m.category);
+  const lines = [];
+  if (live) {
+    const H = live.home, A = live.away;
+    const nPer = Math.max(H.periods.length, A.periods.length);
+    const finished = state.finished || (live.period >= Math.max(reg, nPer) && live.clock && live.clock.minute === 0 && live.clock.second === 0);
+    lines.push(`${H.name} ${H.total} – ${A.total} ${A.name}`);
+    lines.push(finished ? 'Final' : `${periodLabel(live.period - 1, reg)}${live.clock ? ` · ${live.clock.minute}:${pad2(live.clock.second)}` : ''} · este periodo ${H.periods[live.period - 1]?.score ?? 0}-${A.periods[live.period - 1]?.score ?? 0}`);
+    lines.push('Parciales: ' + Array.from({ length: nPer }, (_, i) => `${periodLabel(i, reg)} ${H.periods[i]?.score ?? 0}-${A.periods[i]?.score ?? 0}`).join(', '));
+  } else {
+    const res = m.home.score !== null && m.away.score !== null ? `${m.home.score} – ${m.away.score}` : `${fmtDate(m.date)} ${fmtTime(m.date)}`;
+    lines.push(`${m.home.name} ${res} ${m.away.name}`);
+    if (m.played && m.home.score !== null) lines.push('Final');
+  }
+  lines.push(`${m.category || ''}${m.matchDay ? ` · J${m.matchDay}` : ''}`.trim());
+  return lines.join('\n');
+}
+
+async function shareMatch() {
+  const text = shareText();
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(text); toast('Resultado copiado'); }
+  catch (_) { window.prompt('Copia el resultado:', text); }
+}
+
+let toastTimer;
+function toast(msg) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
 /* Enlace a Google Maps: por coordenadas si las hay, si no por dirección. Abre la app si está instalada. */
 function mapsUrl(m) {
   if (m.lat && m.lon) return `https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lon}`;
@@ -446,6 +484,7 @@ function bind(view) {
 
 $('#btn-back').addEventListener('click', () => { state.visitedList = true; go(state.screen === 'match' ? 'home' : settings.teamId ? 'home' : 'setup'); });
 $('#btn-settings').addEventListener('click', () => go('setup'));
+$('#btn-share').addEventListener('click', shareMatch);
 $('#btn-calendar').addEventListener('click', () => { state.visitedList = true; go('home'); });
 $('#btn-refresh').addEventListener('click', () => { if (state.screen === 'match') loadMatch(); else loadSeason(); });
 if (state.screen === 'home') history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));

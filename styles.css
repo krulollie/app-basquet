@@ -149,3 +149,7 @@ table.roster tr.bench td { opacity: .5; }
 
 .card { min-width: 0; }
 main { overflow-x: hidden; }
+
+#toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: #0b3d5c; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s; z-index: 9; }
+#toast.show { opacity: 1; transform: translateX(-50%); }
+.topbar h1 { min-width: 0; }

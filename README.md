@@ -9,8 +9,9 @@ oficial no muestra en minibàsquet (allí el marcador se reinicia en cada period
 - Tocar una jugadora del propio equipo en la plantilla la marca como seguida: tarjeta propia, jugadas resaltadas y vibración distinta.
 - Se añade a la pantalla de inicio del móvil (PWA básica). Los ajustes y la última instantánea de
   cada partido se guardan en `localStorage`.
-- Flujo: eliges club y equipo una vez → la app abre sola el partido en juego (o el de hoy, o el último)
-  → cada 10 s consulta el feed en directo y suma los parciales.
+- Navegación por barra inferior: Partit (el partido en juego o el de hoy, con el siguiente y el último si no hay),
+  Calendari, Classificació y Ajustos. Primer uso guiado: clave y después la lista de equipos del club con filtro.
+- En directo consulta el feed cada 10 s y suma los parciales.
 
 ## Desarrollo
 

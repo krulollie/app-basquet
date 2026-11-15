@@ -57,6 +57,7 @@ function exportConfigUrl() {
 
 /* ---------- estado ---------- */
 const state = { screen: 'home', season: [], match: null, live: null, error: null, loading: false, lastUpdate: null, selectedPeriod: null, homeTab: 'calendar', standings: null, standingsLoading: false, finished: false, visitedList: false };
+const clubCache = {}; // { clubId: { name, teams } }
 const fx = { adGameId: null, home: null, away: null, mine: null, moveKey: null, celebrated: false, wakeLock: null, postFinal: 0 };
 let timer = null;
 
@@ -64,8 +65,24 @@ function go(screen, extra = {}) {
   clearTimeout(timer); timer = null;
   Object.assign(state, { screen, error: null }, extra);
   render();
-  if (screen === 'home') loadSeason();
+  if (screen === 'home' || screen === 'standings') loadSeason();
   if (screen === 'match') loadMatch();
+  window.scrollTo(0, 0);
+}
+
+/* Pestanya "Partit": el partit en joc o el d'avui; si no n'hi ha, l'últim obert o el següent. */
+async function openMatchTab() {
+  if (!settings.teamId) { go('setup'); return; }
+  if (!state.season.length) {
+    state.loading = true; state.screen = 'match'; state.match = null; render();
+    try { state.season = (await api.teamSeason(settings.teamId)).sort((a, b) => (a.date || 0) - (b.date || 0)); }
+    catch (e) { fail(e); return; }
+    state.loading = false;
+  }
+  const auto = pickMatch(state.season);
+  if (auto && (!state.match || state.match.idMatch !== auto.idMatch)) { go('match', { match: auto, live: null, finished: false, selectedPeriod: null }); return; }
+  if (state.match) { go('match'); return; }
+  state.screen = 'match'; render();
 }
 
 function selectTeam(team) {
@@ -73,8 +90,8 @@ function selectTeam(team) {
   favorites.unshift({ id: team.id, name: team.name, category: team.category || '', clubId: team.clubId || '' });
   settings = { ...settings, clubId: team.clubId || settings.clubId, teamId: team.id, teamName: team.name, favorites: favorites.slice(0, 8) };
   saveJSON(SETTINGS_KEY, settings);
-  Object.assign(state, { season: [], match: null, live: null, visitedList: false, standings: null, finished: false });
-  go('home');
+  Object.assign(state, { season: [], match: null, live: null, standings: null, finished: false });
+  openMatchTab();
 }
 
 function removeFavorite(id) {
@@ -105,11 +122,8 @@ async function loadSeason() {
   try {
     state.season = (await api.teamSeason(settings.teamId)).sort((a, b) => (a.date || 0) - (b.date || 0));
     state.loading = false;
-    const auto = pickMatch(state.season);
-    if (auto && !params.has('list') && !state.visitedList) { go('match', { match: auto }); return; }
-    state.visitedList = true;
     render();
-    if (state.homeTab === 'standings') loadStandings();
+    if (state.screen === 'standings') loadStandings();
   } catch (e) { fail(e); }
 }
 
@@ -282,18 +296,48 @@ function mineSide(match) {
 /* ---------- render ---------- */
 function render() {
   const view = $('#view');
-  $('#btn-back').hidden = state.screen === 'home' || (state.screen === 'setup' && !settings.teamId);
   $('#btn-refresh').hidden = state.screen === 'setup';
-  $('#btn-calendar').hidden = state.screen !== 'match';
   $('#btn-share').hidden = state.screen !== 'match' || !state.match;
-  $('#title').textContent = state.screen === 'setup' ? 'Ajustos' : short(settings.teamName || 'Granollers Live', 24);
-  const html = { setup: renderSetup, home: renderHome, match: renderMatch }[state.screen]();
+  $('#title').textContent = state.screen === 'setup' ? 'Ajustos' : short(settings.teamName || 'Granollers Live', 26);
+  document.querySelectorAll('#nav button').forEach((b) => {
+    b.classList.toggle('sel', b.dataset.screen === state.screen);
+    b.disabled = !settings.teamId && b.dataset.screen !== 'setup';
+  });
+  const html = { setup: renderSetup, home: renderHome, standings: renderStandingsScreen, match: renderMatch }[state.screen]();
   view.innerHTML = (state.error ? `<div class="banner error">${esc(state.error)}</div>` : '') + html;
   bind(view);
   runEffects(view);
 }
 
+async function loadClubTeams(clubId) {
+  if (!clubId || !apiKey() && !DEMO) return;
+  if (clubCache[clubId]) return;
+  clubCache[clubId] = { loading: true };
+  render();
+  try { clubCache[clubId] = await api.club(clubId); }
+  catch (e) { clubCache[clubId] = { error: e instanceof FcbqError && /DENIED/i.test(e.message) ? "La FCBQ ha rebutjat la clau." : "No s'ha pogut carregar el club." }; }
+  render();
+}
+
 function renderSetup() {
+  const hasKey = Boolean(apiKey()) || DEMO;
+  if (!hasKey) {
+    return `
+    <section class="card onboarding">
+      <div class="step">1</div>
+      <h2>Clau d'accés</h2>
+      <p class="hint">L'app llegeix les dades de la federació amb una clau. Si un altre pare ja la té, demana-li el QR d'Ajustos i escaneja'l: ho tindràs tot configurat. Si no, enganxa-la aquí.</p>
+      <form id="key-form" class="row">
+        <input id="api-key" placeholder="Enganxa aquí la clau" autocomplete="off" spellcheck="false" required>
+        <button class="btn">Desa</button>
+      </form>
+    </section>
+    <section class="card dim">
+      <div class="step">2</div>
+      <h2>Tria l'equip</h2>
+      <p class="hint">Després de la clau, aquí sortiran els equips del CB Granollers per triar el teu.</p>
+    </section>`;
+  }
   const favs = settings.favorites.map((f) => `
     <li class="fav ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">
       <span class="fav-pick"><strong>${esc(f.name)}</strong><small>${esc(f.category || '')}</small></span>
@@ -304,13 +348,17 @@ function renderSetup() {
     ${favs ? `<ul class="teams favs">${favs}</ul><p class="hint">Toca'n un per seguir-lo. El marcat amb ★ és l'actual.</p>` : '<p class="hint">Encara no has desat cap equip.</p>'}
   </section>
   <section class="card">
-    <h2>Afegeix un equip</h2>
-    <p class="hint">Escriu el número del club (el de la seva adreça a basquetcatala.cat) i tria l'equip.</p>
-    <form id="club-form" class="row">
-      <input id="club-id" inputmode="numeric" placeholder="Núm. de club" value="${esc(settings.clubId || DEFAULT_CLUB)}" required>
-      <button class="btn">Cerca</button>
-    </form>
-    <div id="club-teams"></div>
+    ${settings.favorites.length ? '' : '<div class="step">2</div>'}
+    <h2>${settings.favorites.length ? 'Afegeix un equip' : "Tria l'equip"}</h2>
+    ${clubTeamsBlock(state.clubId || DEFAULT_CLUB)}
+    <details class="other-club">
+      <summary>Un altre club</summary>
+      <p class="hint">Escriu el número del club: és el de la seva adreça a basquetcatala.cat/clubs. El CB Granollers és l'1 i el Pia Sabadell el 104.</p>
+      <form id="club-form" class="row">
+        <input id="club-id" inputmode="numeric" placeholder="Núm. de club" value="${esc(state.clubId || '')}">
+        <button class="btn">Mostra'n els equips</button>
+      </form>
+    </details>
   </section>
   <section class="card">
     <h2>Comparteix la configuració</h2>
@@ -332,6 +380,21 @@ function renderSetup() {
   </section>`;
 }
 
+function clubTeamsBlock(clubId) {
+  const c = clubCache[clubId];
+  if (!c) { setTimeout(() => loadClubTeams(clubId), 0); return '<p class="hint">Carregant els equips…</p>'; }
+  if (c.loading) return '<p class="hint">Carregant els equips…</p>';
+  if (c.error) return `<p class="banner error">${esc(c.error)}</p>`;
+  const groups = {};
+  for (const t of c.teams) (groups[t.category || 'Altres'] = groups[t.category || 'Altres'] || []).push(t);
+  const order = (cat) => (/PRE-MINI/i.test(cat) ? 1 : /MINI/i.test(cat) ? 0 : /PRE-INF/i.test(cat) ? 2 : /INFANTIL/i.test(cat) ? 3 : /CADET/i.test(cat) ? 4 : /J[UÚ]NIOR/i.test(cat) ? 5 : 9);
+  const cats = Object.keys(groups).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
+  return `<p class="hint club-name">${esc(c.name)} · ${c.teams.length} equips</p>
+    <input id="team-filter" class="filter" placeholder="Filtra: mini femení, cadet…" autocomplete="off">
+    <ul class="teams grouped">${cats.map((cat) => `<li class="cat" data-cat="${esc(cat.toLowerCase())}">${esc(cat)}</li>` + groups[cat].map((t) =>
+      `<li data-id="${esc(t.id)}" data-name="${esc(t.name)}" data-cat="${esc(t.category)}" data-club="${esc(clubId)}" class="pick ${t.id === settings.teamId || settings.favorites.some((f) => f.id === t.id) ? 'sel' : ''}"><span>${esc(t.name)}</span><small>${esc(t.category)}</small>${settings.favorites.some((f) => f.id === t.id) ? '<em>★</em>' : ''}</li>`).join('')).join('')}</ul>`;
+}
+
 function renderHome() {
   if (state.loading && !state.season.length) return `<div class="loading">Carregant el calendari…</div>`;
   const rows = state.season.map((m) => {
@@ -345,9 +408,17 @@ function renderHome() {
   }).join('');
   const chips = settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
     `<button class="team-chip ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">${esc(short(f.name, 22))}</button>`).join('')}</div>` : '';
-  const tabs = `<div class="tabs"><button class="tab ${state.homeTab === 'calendar' ? 'sel' : ''}" data-tab="calendar">Calendari</button><button class="tab ${state.homeTab === 'standings' ? 'sel' : ''}" data-tab="standings">Classificació</button></div>`;
-  if (state.homeTab === 'standings') return chips + tabs + renderStandings();
-  return chips + tabs + `<section class="card"><ul class="matches">${rows || '<li class="hint">Sense partits aquesta temporada.</li>'}</ul></section>`;
+  return chips + `<section class="card"><ul class="matches">${rows || '<li class="hint">Sense partits aquesta temporada.</li>'}</ul></section>`;
+}
+
+function teamChips() {
+  return settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
+    `<button class="team-chip ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">${esc(short(f.name, 22))}</button>`).join('')}</div>` : '';
+}
+
+function renderStandingsScreen() {
+  if (state.loading && !state.season.length) return `<div class="loading">Carregant…</div>`;
+  return teamChips() + renderStandings();
 }
 
 function renderStandings() {
@@ -366,7 +437,21 @@ function renderStandings() {
   </section>`;
 }
 
+function renderNoMatch() {
+  if (state.loading) return `<div class="loading">Carregant…</div>`;
+  const next = state.season.find((m) => !m.played && m.date && m.date > Date.now() - 4 * 3600e3);
+  const last = [...state.season].reverse().find((m) => m.played);
+  const card = (m, label) => m ? `<section class="card next" data-open="${esc(m.idMatch)}">
+      <div class="card-head">${label}</div>
+      <div class="next-row">${crest(m.home.logo, 'crest-sm')}<strong>${esc(m.home.name)}</strong></div>
+      <div class="next-row">${crest(m.away.logo, 'crest-sm')}<strong>${esc(m.away.name)}</strong></div>
+      <p class="hint">${m.played && m.home.score !== null ? `Final ${m.home.score}–${m.away.score}` : `${fmtDate(m.date)} · ${fmtTime(m.date)}${m.venue ? ' · ' + esc(m.venue) : ''}`} · toca per obrir-lo</p>
+    </section>` : '';
+  return `<section class="card empty"><div class="empty-ball"><svg><use href="#i-ball"/></svg></div><h2>Cap partit en joc ara</h2><p class="hint">Quan ${esc(short(settings.teamName || 'el teu equip', 24))} jugui, aquesta pestanya s'obrirà sola en directe.</p></section>` + card(next, 'Proper partit') + card(last, 'Últim partit');
+}
+
 function renderMatch() {
+  if (!state.match) return renderNoMatch();
   const m = state.match, live = state.live;
   const side = mineSide(m);
   const reg = regulationPeriods(m.category);
@@ -696,9 +781,9 @@ function bind(view) {
     const m = state.season.find((x) => x.idMatch === li.dataset.id);
     if (m) go('match', { match: m, live: null, finished: false, selectedPeriod: null });
   }));
-  view.querySelectorAll('.tabs .tab').forEach((b) => b.addEventListener('click', () => {
-    state.homeTab = b.dataset.tab; render();
-    if (state.homeTab === 'standings') loadStandings();
+  view.querySelectorAll('.card.next[data-open]').forEach((c) => c.addEventListener('click', () => {
+    const m = state.season.find((x) => x.idMatch === c.dataset.open);
+    if (m) go('match', { match: m, live: null, finished: false, selectedPeriod: null });
   }));
   const selectPeriod = (v) => { state.selectedPeriod = v === 'all' ? 'all' : Number(v); render(); };
   view.querySelectorAll('.periods-sel .team-chip').forEach((b) => b.addEventListener('click', () => selectPeriod(b.dataset.p)));
@@ -719,25 +804,31 @@ function bind(view) {
     if (f && f.id !== settings.teamId) selectTeam(f);
   }));
   const clubForm = $('#club-form', view);
-  if (clubForm) clubForm.addEventListener('submit', async (e) => {
+  if (clubForm) clubForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const clubId = $('#club-id', view).value.trim();
-    const box = $('#club-teams', view);
-    box.innerHTML = '<p class="hint">Cercant…</p>';
-    try {
-      const club = await api.club(clubId);
-      box.innerHTML = `<p class="hint">${esc(club.name)}</p><ul class="teams">${club.teams.map((t) =>
-        `<li data-id="${esc(t.id)}" data-name="${esc(t.name)}" data-cat="${esc(t.category)}" class="${t.id === settings.teamId ? 'sel' : ''}"><span>${esc(t.name)}</span><small>${esc(t.category)}</small></li>`).join('')}</ul>`;
-      box.querySelectorAll('li').forEach((li) => li.addEventListener('click', () =>
-        selectTeam({ id: li.dataset.id, name: li.dataset.name, category: li.dataset.cat, clubId })));
-    } catch (err) { box.innerHTML = `<p class="banner error">${esc(err.message)}</p>`; }
+    if (clubId) { state.clubId = clubId; render(); }
+  });
+  view.querySelectorAll('.teams.grouped li.pick').forEach((li) => li.addEventListener('click', () =>
+    selectTeam({ id: li.dataset.id, name: li.dataset.name, category: li.dataset.cat, clubId: li.dataset.club })));
+  const filter = $('#team-filter', view);
+  if (filter) filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const list = filter.nextElementSibling;
+    const visibleCats = new Set();
+    list.querySelectorAll('li.pick').forEach((li) => {
+      const hay = (li.dataset.name + ' ' + li.dataset.cat).toLowerCase();
+      const ok = q.every((w) => hay.includes(w));
+      li.hidden = !ok; if (ok) visibleCats.add(li.dataset.cat.toLowerCase());
+    });
+    list.querySelectorAll('li.cat').forEach((li) => { li.hidden = !visibleCats.has(li.dataset.cat); });
   });
   const keyForm = $('#key-form', view);
   if (keyForm) keyForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const k = $('#api-key', view).value.trim();
     if (k) { settings = { ...settings, apiKey: k }; saveJSON(SETTINGS_KEY, settings); api = buildClient(); }
-    go(settings.teamId ? 'home' : 'setup');
+    if (!settings.teamId) go('setup'); else if (params.has('list')) go('home'); else openMatchTab();
   });
   const qr = $('#btn-qr', view);
   if (qr) qr.addEventListener('click', () => showQr($('#qr-box', view)));
@@ -748,14 +839,15 @@ function bind(view) {
   });
 }
 
-$('#btn-back').addEventListener('click', () => { state.visitedList = true; go(state.screen === 'match' ? 'home' : settings.teamId ? 'home' : 'setup'); });
-$('#btn-settings').addEventListener('click', () => go('setup'));
 $('#btn-share').addEventListener('click', shareMatch);
-$('#btn-calendar').addEventListener('click', () => { state.visitedList = true; go('home'); });
 $('#btn-refresh').addEventListener('click', refreshCurrent);
+document.querySelectorAll('#nav button').forEach((b) => b.addEventListener('click', () => {
+  const s = b.dataset.screen;
+  if (s === 'match') openMatchTab(); else go(s);
+}));
 function refreshCurrent() {
-  if (state.screen === 'match') loadMatch();
-  else if (state.homeTab === 'standings') loadStandings(true);
+  if (state.screen === 'match') { if (state.match) loadMatch(); else openMatchTab(); }
+  else if (state.screen === 'standings') { state.season.length ? loadStandings(true) : loadSeason(); }
   else loadSeason();
 }
 
@@ -774,7 +866,7 @@ function refreshCurrent() {
   });
 })();
 
-if (state.screen === 'home') history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));
+history.replaceState(null, '', location.pathname + (params.has('list') ? '?list' : '') + (DEMO ? (params.has('list') ? '&' : '?') + 'demo' : ''));
 if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ---------- modo demo: datos fijos para desarrollo ---------- */
@@ -817,4 +909,4 @@ function demoClient() {
 
 /* arranque */
 if (DEMO && !settings.teamId) settings = { ...settings, teamId: '91044', teamName: 'DEMO · CB GRANOLLERS 2', favorites: [{ id: '91044', name: 'CB GRANOLLERS 2', category: 'C.T. MINI FEMENÍ 1R. ANY' }, { id: '91045', name: 'CB GRANOLLERS 2', category: 'C.T. PRE-MINI FEMENÍ' }] };
-go(settings.teamId ? 'home' : 'setup');
+if (!settings.teamId) go('setup'); else if (params.has('list')) go('home'); else openMatchTab();

@@ -59,7 +59,7 @@ GET públicos con CORS abierto, así que el navegador del móvil los llama direc
 
 ## Autor
 
-Hecha por Carlos, desde la grada del CB Granollers, en noviembre de 2026.
+Hecha por carlos.c, desde la grada del CB Granollers, en noviembre de 2026.
 
 ## Aviso
 

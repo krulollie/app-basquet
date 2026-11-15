@@ -216,3 +216,6 @@ table.stand tbody tr { border-top: 1px solid var(--line); }
 main > * { min-width: 0; max-width: 100%; }
 .team-name { overflow-wrap: break-word; }
 .scoreboard .middle { max-width: 150px; justify-self: center; }
+
+.foot strong { color: var(--ink); }
+.foot { line-height: 1.6; }

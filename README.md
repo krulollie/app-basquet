@@ -57,6 +57,10 @@ GET públicos con CORS abierto, así que el navegador del móvil los llama direc
   equipos del grupo (`idGroup`), 2 puntos por victoria y 1 por derrota, empates por diferencia. Coincide con la
   oficial en primera fase; se cachea 30 minutos.
 
+## Autor
+
+Hecha por Carlos, desde la grada del CB Granollers, en noviembre de 2026.
+
 ## Aviso
 
 basquetcatala.cat prohíbe en sus condiciones de uso la extracción automatizada de datos. Esta app es de

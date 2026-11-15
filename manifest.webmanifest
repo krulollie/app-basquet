@@ -8,6 +8,11 @@
   "lang": "ca",
   "icons": [
     {
+      "src": "icon-64.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
       "src": "icon-180.png",
       "sizes": "180x180",
       "type": "image/png"

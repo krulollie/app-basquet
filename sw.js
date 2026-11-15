@@ -1,8 +1,8 @@
 /* Service worker: l'app obre sense cobertura amb l'última versió vista.
    Xarxa primer per als fitxers propis (sempre frescos si n'hi ha), memòria cau si falla.
    Les crides a la federació no es toquen. */
-const CACHE = 'granollers-live-v19';
-const SHELL = ['./', './index.html', './styles.css?v=18', './app.js?v=18', './fcbq.js', './manifest.webmanifest', './icon.svg', './icon-180.png'];
+const CACHE = 'granollers-live-v20';
+const SHELL = ['./', './index.html', './styles.css?v=18', './app.js?v=18', './fcbq.js', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-64.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))).then(() => self.skipWaiting()));

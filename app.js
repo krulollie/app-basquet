@@ -627,7 +627,7 @@ function crest(url, cls = 'crest', color = null) {
 function teamBlock(team, score, mine, leading = false, logo = null) {
   return `<div class="team ${mine ? 'mine' : ''} ${leading ? 'leading' : ''}">
     ${crest(logo, 'crest', team.color)}
-    <div class="team-name">${esc(team.name)}</div>
+    <div class="team-name ${(team.name || '').length > 16 ? 'long' : ''}">${esc(team.name)}</div>
     <div class="total" data-total="${score === null || score === undefined ? '' : score}">${score === null || score === undefined ? '–' : score}</div>
   </div>`;
 }
@@ -724,6 +724,7 @@ function demoClient() {
           raw.moves.push({ idTeam: t.teamIdIntern, actorName: pl.name, actorShirtNumber: pl.dorsal, move: 'Cistella de 2', period: raw.period, min: 1, sec: Math.max(0, 7 - i), score: '0-0' });
         }
       }
+      if (params.has('long')) { raw.teams[0].name = 'BASQUETPIASABADELL VERD'; raw.teams[1].name = 'JOVENTUT BADALONA NEGRE'; raw.period = 6; raw.matchTime = { minute: 6, second: 0 }; }
       return normalizeLive(raw);
     },
   };

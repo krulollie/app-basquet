@@ -118,6 +118,19 @@ export function moveKind(move) {
   return 'other';
 }
 
+/* Versió curta de la jugada per a la banda i la llista. */
+export function shortMove(move) {
+  let m;
+  if ((m = move.match(/^Cistella de (\d)/i))) return `Cistella de ${m[1]}`;
+  if ((m = move.match(/^Personal(?:\s+(\d)\s+tirs?\s+lliures?)?,?\s*(\d)a falta/i))) return `Falta${m[1] ? ` · ${m[1]} TL` : ''} · ${m[2]}a`;
+  if ((m = move.match(/^Antiesportiva|^Tècnica|^Desqualificant/i))) return move.replace(/,?\s*(\d)a falta/, ' · $1a');
+  if ((m = move.match(/^Intent fallat de (\d)/i))) return m[1] === '1' ? 'TL fallat' : `Tir de ${m[1]} fallat`;
+  if (/^Entra al camp/i.test(move)) return 'Entra';
+  if (/^Surt del camp/i.test(move)) return 'Surt';
+  if (/^Final de per/i.test(move)) return 'Final del període';
+  return move;
+}
+
 export function normalizeLive(d) {
   const teams = d.teams.map((t) => ({
     internId: t.teamIdIntern,
@@ -131,7 +144,7 @@ export function normalizeLive(d) {
     shots: shots(t.data || {}),
     players: (t.players || [])
       .map((p) => ({
-        name: p.name, dorsal: p.dorsal, captain: Boolean(p.captain),
+        id: p.id, name: p.name, dorsal: p.dorsal, captain: Boolean(p.captain),
         points: p.data ? p.data.score || 0 : 0,
         fouls: p.data ? p.data.faults || 0 : 0,
         timePlayed: p.timePlayed || 0,
@@ -151,8 +164,10 @@ export function normalizeLive(d) {
     return {
       team: m.idTeam === home.internId ? 'home' : m.idTeam === away.internId ? 'away' : null,
       player: m.actorName || null,
+      playerId: m.actorId || null,
       dorsal: m.actorShirtNumber || null,
       move: m.move,
+      text: shortMove(m.move),
       kind: moveKind(m.move),
       period: m.period,
       min: m.min, sec: m.sec,

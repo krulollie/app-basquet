@@ -3,7 +3,10 @@
 Web app móvil para seguir en directo un partido de la FCBQ con el **marcador global**, que la app
 oficial no muestra en minibàsquet (allí el marcador se reinicia en cada periodo).
 
-- Sin dependencias ni build: `index.html` + `app.js` + `fcbq.js` + `styles.css`.
+- Interfaz en catalán. Sin dependencias ni build: `index.html` + `app.js` + `fcbq.js` + `styles.css` + `sw.js`.
+- Service worker con red primero y caché de respaldo: abre sin cobertura con lo último visto.
+- Ajustes → "Comparteix la configuració" genera un QR con equipos y clave (`?cfg=<base64url>`) para instalarla en otro móvil.
+- Tocar una jugadora del propio equipo en la plantilla la marca como seguida: tarjeta propia, jugadas resaltadas y vibración distinta.
 - Se añade a la pantalla de inicio del móvil (PWA básica). Los ajustes y la última instantánea de
   cada partido se guardan en `localStorage`.
 - Flujo: eliges club y equipo una vez → la app abre sola el partido en juego (o el de hoy, o el último)

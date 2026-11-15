@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#0b3d5c",
   "theme_color": "#0b3d5c",
-  "lang": "es",
+  "lang": "ca",
   "icons": [
     {
       "src": "icon-180.png",
@@ -17,5 +17,6 @@
       "sizes": "any",
       "type": "image/svg+xml"
     }
-  ]
+  ],
+  "description": "Marcador global en directe dels partits de minibàsquet de la FCBQ."
 }

@@ -287,3 +287,25 @@ main { padding-bottom: 90px; }
 .teams.grouped li.pick:active { background: var(--bg); }
 .other-club { margin-top: 10px; }
 .other-club summary { font-size: 13px; color: var(--home); font-weight: 600; cursor: pointer; }
+
+/* selector d'equip a la capçalera */
+.title-btn { flex: 1; min-width: 0; border: 0; background: transparent; color: #fff; font: inherit; font-size: 17px; font-weight: 600; text-align: left; padding: 6px 8px; margin-left: -8px; border-radius: 10px; display: flex; align-items: center; gap: 6px; cursor: default; }
+.title-btn.switchable { cursor: pointer; }
+.title-btn.switchable:active { background: rgba(255,255,255,.14); }
+#title-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-btn .chev { width: 18px; height: 18px; flex: 0 0 auto; stroke: var(--accent); fill: none; }
+.title-btn .chev { display: none; }
+.title-btn.switchable .chev { display: inline-block; }
+.sheet { position: fixed; inset: 0; z-index: 30; }
+.sheet-bg { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .2s; }
+.sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 18px 18px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform .22s cubic-bezier(.2,.9,.3,1); max-height: 70vh; overflow-y: auto; }
+.sheet.open .sheet-bg { opacity: 1; } .sheet.open .sheet-panel { transform: none; }
+.sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 12px; }
+#sheet-list { list-style: none; margin: 0 0 12px; padding: 0; }
+#sheet-list li { display: flex; align-items: center; justify-content: space-between; padding: 12px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+#sheet-list li:first-child { border-top: 0; }
+#sheet-list li.sel strong { color: var(--home); }
+#sheet-list em { font-style: normal; color: var(--accent); font-size: 18px; }
+#sheet-list .fav-pick { display: flex; flex-direction: column; gap: 2px; }
+#sheet-list small { color: var(--ink-soft); font-size: 12px; }
+#sheet-add { width: 100%; }

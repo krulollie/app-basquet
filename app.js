@@ -72,6 +72,7 @@ function go(screen, extra = {}) {
 
 /* Pestanya "Partit": el partit en joc o el d'avui; si no n'hi ha, l'últim obert o el següent. */
 async function openMatchTab() {
+  clearTimeout(timer); timer = null;
   if (!settings.teamId) { go('setup'); return; }
   if (!state.season.length) {
     state.loading = true; state.screen = 'match'; state.match = null; render();
@@ -140,7 +141,7 @@ function pickMatch(season) {
 
 async function loadMatch() {
   const m = state.match;
-  if (!m) { go('home'); return; }
+  if (!m) { state.screen = 'match'; render(); return; }
   state.loading = !state.live; render();
   try {
     if (!m.adGameId) {
@@ -298,7 +299,9 @@ function render() {
   const view = $('#view');
   $('#btn-refresh').hidden = state.screen === 'setup';
   $('#btn-share').hidden = state.screen !== 'match' || !state.match;
-  $('#title').textContent = state.screen === 'setup' ? 'Ajustos' : short(settings.teamName || 'Granollers Live', 26);
+  $('#title-text').textContent = state.screen === 'setup' ? 'Ajustos' : short(settings.teamName || 'Granollers Live', 24);
+  const canSwitch = settings.favorites.length > 1 && state.screen !== 'setup';
+  $('#title').classList.toggle('switchable', canSwitch);
   document.querySelectorAll('#nav button').forEach((b) => {
     b.classList.toggle('sel', b.dataset.screen === state.screen);
     b.disabled = !settings.teamId && b.dataset.screen !== 'setup';
@@ -345,7 +348,7 @@ function renderSetup() {
   return `
   <section class="card">
     <h2>Equips preferits</h2>
-    ${favs ? `<ul class="teams favs">${favs}</ul><p class="hint">Toca'n un per seguir-lo. El marcat amb ★ és l'actual.</p>` : '<p class="hint">Encara no has desat cap equip.</p>'}
+    ${favs ? `<ul class="teams favs">${favs}</ul><p class="hint">El marcat amb ★ és l'actual. Per canviar-lo des de qualsevol pantalla, toca el nom de l'equip a dalt de tot.</p>` : '<p class="hint">Encara no has desat cap equip.</p>'}
   </section>
   <section class="card">
     ${settings.favorites.length ? '' : '<div class="step">2</div>'}
@@ -406,9 +409,7 @@ function renderHome() {
       <span class="m-teams"><span class="m-team">${crest(m.home.logo, 'crest-sm')}${esc(m.home.name)}</span><span class="m-team">${crest(m.away.logo, 'crest-sm')}${esc(m.away.name)}</span></span>
       <span class="m-res ${m.isLive ? 'live' : ''}">${esc(res)}</span></li>`;
   }).join('');
-  const chips = settings.favorites.length > 1 ? `<div class="chips">${settings.favorites.map((f) =>
-    `<button class="team-chip ${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">${esc(short(f.name, 22))}</button>`).join('')}</div>` : '';
-  return chips + `<section class="card"><ul class="matches">${rows || '<li class="hint">Sense partits aquesta temporada.</li>'}</ul></section>`;
+  return `<section class="card"><ul class="matches">${rows || '<li class="hint">Sense partits aquesta temporada.</li>'}</ul></section>`;
 }
 
 function teamChips() {
@@ -418,7 +419,7 @@ function teamChips() {
 
 function renderStandingsScreen() {
   if (state.loading && !state.season.length) return `<div class="loading">Carregant…</div>`;
-  return teamChips() + renderStandings();
+  return renderStandings();
 }
 
 function renderStandings() {
@@ -838,6 +839,28 @@ function bind(view) {
     settings = { favorites: [], players: {} }; snapshots = {}; api = buildClient(); go('setup');
   });
 }
+
+function openSheet() {
+  const sheet = $('#sheet');
+  $('#sheet-list').innerHTML = settings.favorites.map((f) => `
+    <li class="${f.id === settings.teamId ? 'sel' : ''}" data-id="${esc(f.id)}">
+      <span class="fav-pick"><strong>${esc(f.name)}</strong><small>${esc(f.category || '')}</small></span>${f.id === settings.teamId ? '<em>★</em>' : ''}</li>`).join('');
+  sheet.hidden = false;
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  sheet.querySelectorAll('li').forEach((li) => li.addEventListener('click', () => {
+    closeSheet();
+    const f = settings.favorites.find((x) => x.id === li.dataset.id);
+    if (f && f.id !== settings.teamId) selectTeam(f);
+  }));
+}
+function closeSheet() {
+  const sheet = $('#sheet');
+  sheet.classList.remove('open');
+  setTimeout(() => { sheet.hidden = true; }, 220);
+}
+$('#title').addEventListener('click', () => { if (settings.favorites.length > 1 && state.screen !== 'setup') openSheet(); });
+$('#sheet .sheet-bg').addEventListener('click', closeSheet);
+$('#sheet-add').addEventListener('click', () => { closeSheet(); go('setup'); });
 
 $('#btn-share').addEventListener('click', shareMatch);
 $('#btn-refresh').addEventListener('click', refreshCurrent);

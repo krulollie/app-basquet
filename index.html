@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Granollers Live">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="styles.css?v=20">
+  <link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
   <svg hidden xmlns="http://www.w3.org/2000/svg">
@@ -27,13 +27,14 @@
     <symbol id="i-stats" viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3v18M5.6 5.6c3.5 3.5 9.3 9.3 12.8 12.8M18.4 5.6C14.9 9.1 9.1 14.9 5.6 18.4" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
     <symbol id="i-table" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="19" cy="18" r="2" fill="currentColor"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-qr" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM16 16h2v2h-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
   </svg>
 
   <div id="ptr" aria-hidden="true"><svg><use href="#i-refresh"/></svg></div>
 
   <header class="topbar">
-    <h1 id="title">Granollers Live</h1>
+    <button id="title" class="title-btn" aria-haspopup="listbox"><span id="title-text">Granollers Live</span><svg class="chev"><use href="#i-chev"/></svg></button>
     <div class="topbar-actions">
       <button id="btn-share" class="icon-btn" aria-label="Comparteix" title="Comparteix el resultat"><svg><use href="#i-share"/></svg></button>
       <button id="btn-refresh" class="icon-btn" aria-label="Actualitza"><svg><use href="#i-refresh"/></svg></button>
@@ -44,6 +45,16 @@
 
   <footer class="foot" id="foot">Feta per <strong>carlos.c</strong> per a les grades del CB Granollers · 2026<br>Dades: acta digital FCBQ · ús personal · no oficial</footer>
 
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-bg"></div>
+    <div class="sheet-panel" role="listbox" aria-label="Equips">
+      <div class="sheet-handle"></div>
+      <div class="card-head">Els teus equips</div>
+      <ul id="sheet-list"></ul>
+      <button id="sheet-add" class="btn ghost-ink">+ Afegeix un equip</button>
+    </div>
+  </div>
+
   <nav class="bottom-nav" id="nav">
     <button data-screen="match"><svg><use href="#i-ball"/></svg><span>Partit</span></button>
     <button data-screen="home"><svg><use href="#i-cal"/></svg><span>Calendari</span></button>
@@ -52,6 +63,6 @@
   </nav>
 
   <script src="config.local.js" onerror="window.FCBQ_CONFIG = window.FCBQ_CONFIG || {}"></script>
-  <script type="module" src="app.js?v=20"></script>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>
